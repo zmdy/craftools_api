@@ -121,21 +121,28 @@ recommended before a production rollout.
 
 ## Installation
 
-1.  Copy `.env.example` to `.env` and adjust the values (`API_ALLOWED_ORIGIN`
-    should match your PWA's real production domain).
-2.  Point your (sub)domain's document root at this project's `public/`
+1.  Point your (sub)domain's document root at this project's `public/`
     folder. If your host doesn't allow changing the document root, the
     `.htaccess` at the project root already blocks direct access to `src/`,
     `database/`, and `bin/` even if the whole folder is exposed — but
     `public/` as the document root is still the correct setup.
-3.  Make sure `storage/` is writable by PHP. It is populated automatically
+2.  Make sure `storage/` is writable by PHP. It is populated automatically
     on first run, including the SQLite database created from
     `database/schema.sql`.
-4.  Create your administrator account (there is no default password):
+3.  Open `/install.php` in a browser and follow the 3-step wizard: it
+    checks server requirements (PHP version, extensions, `storage/`
+    permissions), writes `.env` for you, and creates your administrator
+    account (there is no default password). The installer locks itself out
+    automatically once that account exists — delete `install.php` from the
+    server afterward as an extra precaution.
+
+    Prefer the command line, or don't have web access yet? Skip
+    `install.php` entirely:
     ```
+    cp .env.example .env   # then edit the values by hand
     php bin/create_admin.php
     ```
-5.  *(Optional)* Migrate data from the legacy system
+4.  *(Optional)* Migrate data from the legacy system
     (`api/api/data.json` and `api/api/tokens.json`):
     ```
     php bin/migrate_legacy.php
@@ -145,8 +152,8 @@ recommended before a production rollout.
     production to a hash, without ever exposing the plain value. Read the
     summary printed at the end: images whose physical file isn't found on
     disk will need to be re-uploaded manually through the panel.
-6.  Sign in at `/index.php?page=login` with the e-mail/password created in
-    step 4.
+5.  Sign in at `/index.php?page=login` with the e-mail/password created in
+    step 3.
 
 Before deploying to production, run `php -l` on every `.php` file and do a
 full functional test locally — this project was developed without access to
@@ -158,6 +165,7 @@ a PHP interpreter in the environment it was generated in (see
 ```
 craftools_api/
 ├── public/                 ← document root (point your vhost here)
+│   ├── install.php           3-step web installer (env + admin account)
 │   ├── index.php             admin panel front controller
 │   ├── actions.php           handles every panel POST
 │   ├── views/                one view per panel section

@@ -271,8 +271,43 @@ message.
 
 See the [README](../README.md#installation) for the step-by-step guide.
 Summary: point the document root at `public/`, make `storage/` writable,
-copy `.env.example` to `.env`, create an admin account with
-`bin/create_admin.php`, optionally run `bin/migrate_legacy.php`.
+then either open `public/install.php` in a browser (recommended) or do it
+by hand — copy `.env.example` to `.env` and create an admin account with
+`bin/create_admin.php`. Optionally run `bin/migrate_legacy.php` afterward.
+
+### `public/install.php` — web installer
+
+A single self-contained file, reachable at `/install.php`, that walks
+through the same setup `bin/create_admin.php` and a hand-edited `.env`
+would otherwise require, for hosts where running PHP from the CLI isn't
+convenient (or isn't possible at all on some shared-hosting plans):
+
+1. **Requirements check** — runs entirely without `bootstrap.php` (PHP
+   version, `pdo_sqlite`/`gd`/`fileinfo`/`mbstring`/`json` extensions,
+   `storage/` writability), so a missing extension or bad permission shows
+   a clear diagnostic instead of a fatal error. `bootstrap.php` is only
+   required once these checks pass — by that point it's safe for it to
+   auto-create the SQLite database.
+2. **Environment configuration** — a form for `APP_TIMEZONE`,
+   `API_ALLOWED_ORIGIN`, `API_RATE_LIMIT_PER_IP`,
+   `API_RATE_LIMIT_WINDOW_SECONDS`, and `APP_DEBUG`, pre-filled from any
+   existing `.env` (or the same defaults as `.env.example`). Writes `.env`
+   directly; CSRF-protected via `csrfField()`/`verifyCsrf()` like every
+   other panel form.
+3. **Administrator account** — name/e-mail/password form using the exact
+   validation rules as `bin/create_admin.php` (valid e-mail, password ≥ 10
+   characters, confirmation match), hashed with `passwordHashNew()` and
+   inserted as the `admin` role.
+4. **Done** — confirms success and links to the login page.
+
+Self-locking: at the top of every request, the script checks
+`adminCountActive() > 0`. If any administrator account already exists, it
+skips straight to the "done" screen regardless of which step was
+requested — the installer cannot create a second account or rewrite
+`.env` once the system is live. This is the only safeguard; there is no
+secret token gating the page before that point, so the file should be
+removed from the server right after use, the same way a WordPress-style
+installer would be.
 
 Environment variables (`.env`, parsed by `env()` in `bootstrap.php`):
 
@@ -345,3 +380,8 @@ Beyond that baseline check, recommended next steps:
   `admin` to manage other admin accounts (creation/deactivation is
   CLI-only via `bin/create_admin.php`); consider adding a panel page for
   this if the team managing it grows beyond CLI-comfortable operators.
+* **`install.php` has no secret-token gate** — it relies solely on the
+  "no admin account yet" check to lock itself out, so on a slow or
+  unattended deployment it's briefly reachable by anyone who finds the
+  URL first. Run it immediately after upload and delete the file right
+  after; it is not designed to be left on the server long-term.
