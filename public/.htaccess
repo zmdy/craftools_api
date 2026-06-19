@@ -1,0 +1,42 @@
+# craftools_api/public/.htaccess — esta pasta É a raiz pública (DocumentRoot
+# ideal). Reabre o acesso bloqueado pelo .htaccess da pasta pai e aplica
+# proteções específicas da raiz pública.
+
+<IfModule mod_authz_core.c>
+    Require all granted
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Allow from all
+</IfModule>
+
+Options -Indexes
+Options -MultiViews
+
+# Nunca servir os arquivos de configuração se alguém copiar o .env para aqui por engano.
+<FilesMatch "(^\.env|\.sql$|\.md$)">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order deny,allow
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "SAMEORIGIN"
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+<IfModule mod_php7.c>
+    php_flag display_errors Off
+    php_value error_reporting 0
+</IfModule>
+<IfModule mod_php8.c>
+    php_flag display_errors Off
+    php_value error_reporting 0
+</IfModule>
+
+DirectoryIndex index.php

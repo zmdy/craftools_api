@@ -1,0 +1,21 @@
+.env
+.DS_Store
+
+# Runtime SQLite database (auto-created from database/schema.sql on first run)
+storage/*.sqlite
+storage/*.sqlite-*
+
+# Logs
+storage/logs/*.log
+!storage/logs/.gitkeep
+
+# Uploaded/migrated source images (kept out of version control; only the
+# generated .webp assets under public/api/assets are served at runtime)
+storage/incoming/backgrounds/*
+!storage/incoming/backgrounds/.gitkeep
+storage/incoming/overlays/*
+!storage/incoming/overlays/.gitkeep
+
+# Generated WebP assets served by the public API
+public/api/assets/*
+!public/api/assets/.gitkeep
