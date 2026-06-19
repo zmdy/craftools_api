@@ -33,19 +33,32 @@ build step. It is designed to run on ordinary shared hosting with
 
 `public/index.php` is the single front controller for the panel. It:
 
-1. Resolves `?page=...` against a hardcoded whitelist (`login`, `logout`,
+1. **Install gate**: if `adminCountActive() === 0` (no active administrator
+   exists yet), every panel URL — including the bare document root — is
+   redirected to `install.php`, regardless of `?page=`. This check
+   disappears on its own as soon as the first administrator account is
+   created; there is no separate "installed" flag to maintain.
+2. Resolves `?page=...` against a hardcoded whitelist (`login`, `logout`,
    `dashboard`, `users`, `tokens`, `grid_sizes`, `album_templates`,
    `assets`, `phrases`), falling back to `dashboard` for anything else.
-2. Handles `logout` and `login` before the auth gate (login obviously can't
+   Visiting the bare root (no `?page=`) therefore behaves exactly like
+   `?page=dashboard` once installed — which, for a logged-out visitor,
+   means a redirect to the login screen (next point).
+3. Handles `logout` and `login` before the auth gate (login obviously can't
    require being logged in).
-3. Calls `requireAdminLogin()` — redirects to the login page if there is no
+4. Calls `requireAdminLogin()` — redirects to the login page if there is no
    valid session — then `applySecurityHeaders()`.
-4. On `POST`, includes `public/actions.php`, which calls `requireCsrf()`
+5. On `POST`, includes `public/actions.php`, which calls `requireCsrf()`
    first and then dispatches to a `switch` over `$_POST['_action']` keyed by
    page and action (e.g. `users`/`save`, `tokens`/`delete`). Every action
    path ends in a redirect (`flashRedirect()`), so the panel follows a
    strict post/redirect/get pattern with no exceptions.
-5. Renders `views/_header.php`, `views/{page}.php`, `views/_footer.php`.
+6. Renders `views/_header.php`, `views/{page}.php`, `views/_footer.php`.
+
+Note that this install gate only covers the admin panel (`public/index.php`
+and everything it renders). `/api/` and `/v1/` are untouched by it and keep
+working independently of whether an admin account exists — they only care
+about `api_tokens`, which is a separate concern from panel access.
 
 ### 2.2 Bootstrap (`src/bootstrap.php`)
 

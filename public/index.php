@@ -6,6 +6,15 @@
 
 require_once __DIR__ . '/../src/bootstrap.php';
 
+// Se ainda não existe nenhuma conta de administrador ativa, o sistema não
+// foi instalado: qualquer URL do painel (raiz, login, etc.) direciona
+// automaticamente para o assistente de instalação. Some sozinho depois que
+// a primeira conta é criada.
+if (adminCountActive() === 0) {
+    header('Location: install.php');
+    exit;
+}
+
 $validPages = ['login', 'logout', 'dashboard', 'users', 'tokens', 'grid_sizes', 'album_templates', 'assets', 'phrases'];
 $page = (string) ($_GET['page'] ?? 'dashboard');
 if (!in_array($page, $validPages, true)) {
