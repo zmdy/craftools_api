@@ -118,6 +118,23 @@ if ($activeCollection) {
     $editing = $editId > 0 ? assetCollectionFind($editId) : null;
     $collections = assetCollectionList();
     ?>
+    <div class="card mb-4">
+        <div class="card-head"><h2>Importação em Massa</h2></div>
+        <div class="card-body">
+            <p class="text-muted" style="margin-bottom: 16px;">
+                Esta ferramenta escaneia automaticamente os diretórios em <code>assets/original/backgrounds/</code> e <code>assets/original/overlays/</code>.
+                Cada subpasta encontrada será cadastrada como uma nova coleção (Tier Free), e todas as imagens (JPEG, PNG, GIF, WebP) dentro delas serão processadas, convertidas para WebP (max 2000px, 82 quality) e enviadas para o storage.
+            </p>
+            <form method="post" action="index.php?page=assets" data-confirm="Tem certeza? Este processo pode levar alguns minutos dependendo da quantidade de fotos. Não feche a página.">
+                <?= csrfField() ?>
+                <input type="hidden" name="_action" value="bulk_import_original">
+                <button type="submit" class="btn btn-primary">
+                    <span class="material-symbols-outlined">drive_folder_upload</span> Iniciar Importação
+                </button>
+            </form>
+        </div>
+    </div>
+
     <div class="card">
         <div class="card-head"><h2><?= $editing ? 'Editar coleção' : 'Nova coleção' ?></h2></div>
         <div class="card-body">

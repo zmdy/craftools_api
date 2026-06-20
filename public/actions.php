@@ -176,12 +176,90 @@ try {
                 $id = (int) ($_POST['id'] ?? 0);
                 $col = assetCollectionFind($id);
                 if ($col) {
-                    $dir = CRAFTOOLS_API_ROOT . '/public/api/assets/' . $col['uuid'];
+                    $dir = CRAFTOOLS_API_ROOT . '/public/v1/assets/' . $col['uuid'];
                     removeDirRecursive($dir);
                 }
                 assetCollectionDelete($id);
                 auditLog($adminId, 'delete', 'asset_collections', (string) $id);
                 flashRedirect('success', 'Coleção e imagens removidas.', 'index.php?page=assets');
+            }
+
+            if ($action === 'bulk_import_original') {
+                $baseDir = CRAFTOOLS_API_ROOT . '/assets/original';
+                if (!is_dir($baseDir)) {
+                    flashRedirect('error', 'A pasta assets/original não existe.', 'index.php?page=assets');
+                }
+                
+                $importedCollections = 0;
+                $importedImages = 0;
+                
+                $types = ['backgrounds' => 'background', 'overlays' => 'overlay'];
+                
+                foreach ($types as $folder => $typeStr) {
+                    $typeDir = $baseDir . '/' . $folder;
+                    if (!is_dir($typeDir)) continue;
+                    
+                    $iterator = new DirectoryIterator($typeDir);
+                    foreach ($iterator as $dirInfo) {
+                        if ($dirInfo->isDot() || !$dirInfo->isDir()) continue;
+                        
+                        $collectionName = $dirInfo->getFilename();
+                        $colPath = $typeDir . '/' . $collectionName;
+                        
+                        // Create collection
+                        $colId = assetCollectionCreate([
+                            'type' => $typeStr,
+                            'tier' => 'free',
+                            'sort_order' => 0,
+                            'comment' => $collectionName,
+                            'original_path' => 'assets/original/' . $folder . '/' . $collectionName,
+                            'active' => 1
+                        ]);
+                        $importedCollections++;
+                        
+                        $col = assetCollectionFind($colId);
+                        
+                        // Process images
+                        $filesIt = new DirectoryIterator($colPath);
+                        foreach ($filesIt as $fileInfo) {
+                            if ($fileInfo->isDot() || !$fileInfo->isFile()) continue;
+                            
+                            $ext = strtolower($fileInfo->getExtension());
+                            if (!in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif'])) continue;
+                            
+                            $imgUuid = uuidv4();
+                            $destPath = CRAFTOOLS_API_ROOT . '/public/v1/assets/' . $col['uuid'] . '/' . $imgUuid . '.webp';
+                            
+                            $destDir = dirname($destPath);
+                            if (!is_dir($destDir)) {
+                                mkdir($destDir, 0775, true);
+                            }
+                            
+                            try {
+                                [$width, $height] = processAndConvertToWebp($fileInfo->getPathname(), $destPath, IMG_MAX_WIDTH, IMG_WEBP_QUALITY);
+                                
+                                $newImgId = assetImageCreate([
+                                    'collection_id' => $colId,
+                                    'original_name' => $fileInfo->getFilename(),
+                                    'file_path' => 'v1/assets/' . $col['uuid'] . '/' . $imgUuid . '.webp',
+                                    'width' => $width,
+                                    'height' => $height,
+                                    'size_bytes' => (int) filesize($destPath),
+                                    'comment' => '',
+                                    'tier' => 'free'
+                                ]);
+                                
+                                db()->prepare('UPDATE asset_images SET uuid = ? WHERE id = ?')->execute([$imgUuid, $newImgId]);
+                                auditLog($adminId, 'create', 'asset_images', (string) $newImgId);
+                                $importedImages++;
+                            } catch (Exception $e) {
+                                // Skip failing images silently during bulk import
+                            }
+                        }
+                    }
+                }
+                
+                flashRedirect('success', "Importação concluída: $importedCollections coleções e $importedImages imagens adicionadas.", 'index.php?page=assets');
             }
 
             if ($action === 'image_upload') {
@@ -194,12 +272,12 @@ try {
                     flashRedirect('error', 'Selecione um arquivo de imagem.', $backTo);
                 }
                 $imgUuid = uuidv4();
-                $destPath = CRAFTOOLS_API_ROOT . '/public/api/assets/' . $col['uuid'] . '/' . $imgUuid . '.webp';
+                $destPath = CRAFTOOLS_API_ROOT . '/public/v1/assets/' . $col['uuid'] . '/' . $imgUuid . '.webp';
                 $meta = handleImageUpload($_FILES['image'], $destPath);
                 $newId = assetImageCreate([
                     'collection_id' => $collectionId,
                     'original_name' => $_FILES['image']['name'],
-                    'file_path' => 'api/assets/' . $col['uuid'] . '/' . $imgUuid . '.webp',
+                    'file_path' => 'v1/assets/' . $col['uuid'] . '/' . $imgUuid . '.webp',
                     'width' => $meta['width'],
                     'height' => $meta['height'],
                     'size_bytes' => $meta['size_bytes'],
@@ -224,7 +302,7 @@ try {
                 $img = assetImageFind($id);
                 if ($img && !empty($img['file_path'])) {
                     $full = CRAFTOOLS_API_ROOT . '/public/' . $img['file_path'];
-                    assertPathInsideBase(dirname($full), CRAFTOOLS_API_ROOT . '/public/api/assets');
+                    assertPathInsideBase(dirname($full), CRAFTOOLS_API_ROOT . '/public/v1/assets');
                     @unlink($full);
                 }
                 assetImageDelete($id);

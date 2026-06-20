@@ -56,7 +56,7 @@ function handleImageUpload(array $file, string $destinationPath): array {
     // Garante que o destino realmente fica dentro da pasta pública de assets,
     // mesmo que algum chamador futuro monte $destinationPath a partir de
     // input menos confiável do que os uuids gerados internamente hoje.
-    assertPathInsideBase($destDir, CRAFTOOLS_API_ROOT . '/public/api/assets');
+    assertPathInsideBase($destDir, CRAFTOOLS_API_ROOT . '/public/v1/assets');
 
     [$width, $height] = processAndConvertToWebp($file['tmp_name'], $destinationPath, IMG_MAX_WIDTH, IMG_WEBP_QUALITY);
 

@@ -56,9 +56,9 @@ if (isset($tokenResult['error'])) {
 $tier = $tokenResult['tier'] ?? 'free';
 
 $resource = isset($_GET['resource']) ? strtolower(trim((string) $_GET['resource'])) : '';
-$validResources = ['grid-sizes', 'album-templates', 'phrases'];
+$validResources = ['grid-sizes', 'album-templates', 'phrases', 'assets', 'backgrounds', 'overlays', 'collection'];
 if (!in_array($resource, $validResources, true)) {
-    v1JsonError(400, 'Recurso inválido. Disponíveis: grid-sizes, album-templates, phrases.');
+    v1JsonError(400, 'Recurso inválido. Disponíveis: grid-sizes, album-templates, phrases, assets, backgrounds, overlays, collection.');
 }
 
 $data = [];
@@ -76,6 +76,37 @@ switch ($resource) {
         $language = isset($_GET['language']) ? (string) $_GET['language'] : null;
         $limit = intInput($_GET, 'limit', 50, 1, 200);
         $data = phraseListActiveForTier($tier, $category, $language, $limit);
+        break;
+
+    case 'assets':
+        $data = assetCollectionsForApi($tier);
+        break;
+
+    case 'backgrounds':
+        $data = assetCollectionsForApi($tier, 'background');
+        break;
+
+    case 'overlays':
+        $data = assetCollectionsForApi($tier, 'overlay');
+        break;
+
+    case 'collection':
+        $id = isset($_GET['id']) ? preg_replace('/[^a-f0-9\-]/', '', (string) $_GET['id']) : '';
+        if ($id === '') {
+            v1JsonError(400, 'Parâmetro "id" é obrigatório para a rota "collection".');
+        }
+
+        $visible = assetCollectionsForApi($tier, null, $id);
+        if ($visible) {
+            $data = $visible[0];
+            break;
+        }
+
+        $rawCollection = assetCollectionFindByUuid($id);
+        if ($rawCollection !== null) {
+            v1JsonError(403, 'Esta coleção requer um nível de acesso superior.');
+        }
+        v1JsonError(404, 'Coleção não encontrada.');
         break;
 }
 
