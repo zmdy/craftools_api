@@ -17,5 +17,5 @@ storage/incoming/overlays/*
 !storage/incoming/overlays/.gitkeep
 
 # Generated WebP assets served by the public API
-public/api/assets/*
-!public/api/assets/.gitkeep
+public/v1/assets/*
+!public/v1/assets/.gitkeep
