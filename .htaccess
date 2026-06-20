@@ -1,22 +1,18 @@
 # craftools_api/.htaccess
 #
-# Camada de defesa extra para hospedagens compartilhadas onde NÃO é possível
-# apontar o DocumentRoot direto para craftools_api/public/ (cenário ideal —
-# ver README.md). Se a pasta craftools_api inteira ficar acessível pela web,
-# esta regra bloqueia qualquer acesso a tudo que não esteja dentro de public/.
-#
-# Se o seu provedor permitir configurar o DocumentRoot para apontar
-# diretamente para "public/", este arquivo é redundante mas inofensivo.
+# Regras de roteamento para permitir que o sistema funcione corretamente
+# quando instalado dentro de uma subpasta (ex: public_html/craftools_api/)
+# sem precisar apontar o DocumentRoot diretamente para a pasta public/.
 
-<IfModule mod_authz_core.c>
-    Require all denied
-</IfModule>
-<IfModule !mod_authz_core.c>
-    Order deny,allow
-    Deny from all
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^$ public/ [L]
+    RewriteCond %{REQUEST_URI} !public/
+    RewriteRule (.*) public/$1 [L]
 </IfModule>
 
-<Files ~ "\.(php|sql|json|env|md)$">
+# Bloqueia acesso direto aos arquivos de configuração e documentação na raiz
+<FilesMatch "^\.env|^\.gitignore|README\.md|\.sql$|\.json$">
     <IfModule mod_authz_core.c>
         Require all denied
     </IfModule>
@@ -24,4 +20,4 @@
         Order deny,allow
         Deny from all
     </IfModule>
-</Files>
+</FilesMatch>

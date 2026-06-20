@@ -453,7 +453,7 @@ function assetCollectionsForApi(string $tier, ?string $typeFilter = null, ?strin
             }
             $images[] = [
                 'id' => $img['uuid'],
-                'api_url' => '/api/assets/' . $col['uuid'] . '/' . $img['uuid'] . '.webp',
+                'api_url' => $img['file_path'],
                 'comment' => (string) $img['comment'],
                 'tier' => $img['tier'],
             ];
