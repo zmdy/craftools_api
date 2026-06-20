@@ -259,7 +259,7 @@ try {
                     }
                 }
                 
-                flashRedirect('success', "Importação concluída: $importedCollections coleções e $importedImages imagens adicionadas.", 'index.php?page=assets');
+                flashRedirect('success', "Importação concluída: $importedCollections coleções e $importedImages imagens adicionadas.", 'index.php?page=bulk_import');
             }
 
             if ($action === 'image_upload') {

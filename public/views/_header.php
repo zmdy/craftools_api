@@ -8,6 +8,7 @@ $navItems = [
     ['key' => 'grid_sizes', 'icon' => 'grid_view', 'label' => 'Tamanhos de Grid'],
     ['key' => 'album_templates', 'icon' => 'auto_stories', 'label' => 'Templates de Álbum'],
     ['key' => 'assets', 'icon' => 'image', 'label' => 'Overlays & Fundos'],
+    ['key' => 'bulk_import', 'icon' => 'drive_folder_upload', 'label' => 'Importação em Massa'],
     ['key' => 'phrases', 'icon' => 'format_quote', 'label' => 'Banco de Frases'],
 ];
 $pageTitles = [
@@ -17,6 +18,7 @@ $pageTitles = [
     'grid_sizes' => ['Tamanhos de Grid', 'Catálogo de grids do editor de álbuns'],
     'album_templates' => ['Templates de Álbum', 'Modelos de capa e diagramação'],
     'assets' => ['Overlays & Fundos', 'Coleções de imagens de overlay e background'],
+    'bulk_import' => ['Importação em Massa', 'Importe coleções de imagens automaticamente'],
     'phrases' => ['Banco de Frases', 'Frases motivacionais por autor/categoria/idioma'],
 ];
 $title = $pageTitles[$page][0] ?? 'CraftTools API';
