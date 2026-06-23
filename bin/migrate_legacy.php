@@ -5,7 +5,7 @@
  * Importa os dados do sistema legado (api/api/data.json e api/api/tokens.json)
  * para o novo banco SQLite, preservando:
  *   - os IDs originais das coleções/imagens (gravados na coluna `uuid`), para
- *     que as URLs já em uso por ApiPicker.js (/api/assets/<id>/<id>.webp)
+ *     que as URLs já em uso por ApiPicker.js (/v1/assets/<id>/<id>.webp)
  *     continuem funcionando sem qualquer alteração no cliente;
  *   - o token de API já em produção, migrado como HASH (nunca em texto puro).
  *
@@ -82,7 +82,7 @@ if (!is_file($dataPath)) {
             foreach ((array) ($col['images'] ?? []) as $img) {
                 $imgId = (string) $img['id'];
                 $existingImg = repoFindByUuid('asset_images', $imgId);
-                $destRelative = 'api/assets/' . $colId . '/' . $imgId . '.webp';
+                $destRelative = 'v1/assets/' . $colId . '/' . $imgId . '.webp';
                 $destAbsolute = CRAFTOOLS_API_ROOT . '/public/' . $destRelative;
 
                 $width = null;

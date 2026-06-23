@@ -1,8 +1,21 @@
 # craftools_api/.htaccess
 #
-# Regras de roteamento para permitir que o sistema funcione corretamente
-# quando instalado dentro de uma subpasta (ex: public_html/craftools_api/)
-# sem precisar apontar o DocumentRoot diretamente para a pasta public/.
+# Esta pasta pode ficar exposta na web em dois cenários:
+#  1) DocumentRoot aponta direto para public/ (cenário ideal) — este
+#     arquivo nem chega a ser lido pelo Apache; redundante mas inofensivo.
+#  2) craftools_api está instalado como subpasta dentro do docroot
+#     (ex: public_html/craftools_api/), sem subdomínio dedicado — aqui esta
+#     pasta raiz também é servida pela web. O bloco de rewrite abaixo
+#     redireciona toda requisição para dentro de public/, para o sistema
+#     funcionar nesse layout.
+#
+# O rewrite só roteia para public/ — nunca expõe src/, bin/, database/ ou
+# storage/, já que nenhum desses caminhos existe dentro de public/. Mas se
+# mod_rewrite estiver desabilitado pelo provedor (não é raro em hospedagem
+# compartilhada), o bloco de rewrite simplesmente não executa, e sem uma
+# defesa própria esta pasta serviria os .php de src/ e bin/ diretamente.
+# Por isso o "Require all denied" abaixo nega tudo nesta pasta por padrão;
+# public/.htaccess reabre especificamente o que precisa ser servido dali.
 
 <IfModule mod_rewrite.c>
     RewriteEngine On
@@ -11,13 +24,10 @@
     RewriteRule (.*) public/$1 [L]
 </IfModule>
 
-# Bloqueia acesso direto aos arquivos de configuração e documentação na raiz
-<FilesMatch "^\.env|^\.gitignore|README\.md|\.sql$|\.json$">
-    <IfModule mod_authz_core.c>
-        Require all denied
-    </IfModule>
-    <IfModule !mod_authz_core.c>
-        Order deny,allow
-        Deny from all
-    </IfModule>
-</FilesMatch>
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order deny,allow
+    Deny from all
+</IfModule>

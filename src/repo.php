@@ -453,7 +453,10 @@ function assetCollectionsForApi(string $tier, ?string $typeFilter = null, ?strin
             }
             $images[] = [
                 'id' => $img['uuid'],
-                'api_url' => $img['file_path'],
+                // ApiPicker.js monta a URL final como `${API_BASE}${api_url}` — precisa
+                // da barra inicial. file_path é salvo sem barra (bulk_import, image_upload,
+                // migrate_legacy.php), então ela é adicionada aqui, no único ponto de saída.
+                'api_url' => '/' . ltrim((string) $img['file_path'], '/'),
                 'comment' => (string) $img['comment'],
                 'tier' => $img['tier'],
             ];
