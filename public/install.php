@@ -66,7 +66,10 @@ $alreadyInstalled = false;
 $envValues = [
     'APP_DEBUG' => '0',
     'APP_TIMEZONE' => 'America/Sao_Paulo',
-    'API_ALLOWED_ORIGIN' => '*',
+    // Propositalmente vazio (em vez de "*"): obriga quem instala a digitar a
+    // origem real antes de continuar (o passo "environment" rejeita string
+    // vazia), em vez de aceitar por padrão um CORS aberto para qualquer site.
+    'API_ALLOWED_ORIGIN' => '',
     'API_RATE_LIMIT_PER_IP' => '120',
     'API_RATE_LIMIT_WINDOW_SECONDS' => '60',
 ];
@@ -119,7 +122,7 @@ if ($requirementsOk) {
                     '# Fuso horário usado em timestamps gerados pela aplicação.',
                     'APP_TIMEZONE=' . $posted['APP_TIMEZONE'],
                     '',
-                    '# Origem permitida para CORS nas APIs públicas (/api e /v1).',
+                    '# Origem permitida para CORS na API pública (/v1).',
                     'API_ALLOWED_ORIGIN=' . $posted['API_ALLOWED_ORIGIN'],
                     '',
                     '# Limites do rate limiter das APIs públicas.',
@@ -261,8 +264,8 @@ if ($requirementsOk) {
           </div>
           <div class="field">
             <label for="api_allowed_origin">Origem permitida (CORS) das APIs públicas</label>
-            <input type="text" id="api_allowed_origin" name="api_allowed_origin" value="<?= ie($envValues['API_ALLOWED_ORIGIN']) ?>" required>
-            <div class="help-text">Domínio do seu PWA em produção (ex: https://app.seudominio.com) ou "*" para permitir qualquer origem.</div>
+            <input type="text" id="api_allowed_origin" name="api_allowed_origin" value="<?= ie($envValues['API_ALLOWED_ORIGIN']) ?>" placeholder="https://app.seudominio.com" required>
+            <div class="help-text">Domínio do seu PWA em produção (ex: https://app.seudominio.com). Também aceita "*" para permitir qualquer origem, mas evite isso em produção — use apenas para desenvolvimento local.</div>
           </div>
           <div class="field-row">
             <div class="field">
