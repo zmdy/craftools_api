@@ -19,9 +19,11 @@ file (`tokens.json`) — with:
 * a SQLite-backed data model with proper entities for customers, API
   tokens, grid sizes, album templates, asset collections/images, and the
   phrase bank;
-* two public, token-authenticated HTTP APIs: one that is contract-compatible
-  with the legacy system (`/api/`), and one exposing the new catalog
-  resources (`/v1/`).
+* a public, token-authenticated HTTP API (`/v1/`) exposing the catalog
+  resources (grid sizes, album templates, phrases, asset collections).
+  An earlier design also planned a contract-compatible `/api/` endpoint to
+  ease migration from the legacy prototype, but it was never built — only
+  `/v1/` ships in `public/`. See §5 for details.
 
 The project is plain PHP 7.2+: no framework, no Composer dependencies, no
 build step. It is designed to run on ordinary shared hosting with
@@ -56,13 +58,13 @@ build step. It is designed to run on ordinary shared hosting with
 6. Renders `views/_header.php`, `views/{page}.php`, `views/_footer.php`.
 
 Note that this install gate only covers the admin panel (`public/index.php`
-and everything it renders). `/api/` and `/v1/` are untouched by it and keep
-working independently of whether an admin account exists — they only care
-about `api_tokens`, which is a separate concern from panel access.
+and everything it renders). `/v1/` is untouched by it and keeps working
+independently of whether an admin account exists — it only cares about
+`api_tokens`, which is a separate concern from panel access.
 
 ### 2.2 Bootstrap (`src/bootstrap.php`)
 
-Every entry point — the panel, `/api/`, `/v1/`, and the `bin/*` CLI scripts —
+Every entry point — the panel, `/v1/`, and the `bin/*` CLI scripts —
 starts with `require_once __DIR__ . '/../src/bootstrap.php'`, which:
 
 * Defines `CRAFTOOLS_API_ROOT`, `CRAFTOOLS_API_STORAGE`, and
@@ -201,63 +203,41 @@ inactive, or expired is still rejected, exactly as before.
 
 ## 5. Public API Reference
 
-Both public APIs share the same token scheme and CORS handling. Tokens are
-accepted, in order of precedence, as: `?token=...` query parameter,
-`X-API-Token` header, or `Authorization: Bearer ...` header. CORS origin is
-controlled by `API_ALLOWED_ORIGIN` in `.env` (defaults to `*`).
+> **About the legacy `/api/?route=...` endpoint.** Earlier drafts of this
+> document (and of the README) described a second public endpoint,
+> contract-compatible with the legacy prototype's `api/api/index.php`,
+> reachable at `/api/?route=all|backgrounds|overlays|collection`. **That
+> endpoint was never implemented** — `public/` only ships `index.php`
+> (admin panel) and `v1/index.php`. There is no `public/api/` directory in
+> this codebase. The PWA's `ApiPicker.js` and `ApiDataLoader.js` have always
+> called `/v1/?resource=...` exclusively, so this has no effect on the
+> shipped frontend; it only matters if some external client still expects
+> the old `/api/` contract — point it at `/v1/` instead (the token scheme is
+> identical), or extend `bin/migrate_legacy.php`'s approach if a literal
+> `/api/` shim is genuinely needed.
 
-### 5.1 `GET /api/` — legacy-compatible asset API
+### 5.1 `GET /v1/` — catalog & asset API
 
-Contract-compatible with `api/api/index.php` from the legacy project: same
-response shape, same query parameters, same token precedence. The PWA's
-existing `craftools/craftools/tools/album/ApiPicker.js` consumes this
-endpoint without any client-side change.
-
-| Parameter | Values | Notes |
-|---|---|---|
-| `route` | `all` (default), `backgrounds`, `overlays`, `collection` | Selects which asset collections to return. |
-| `id` | uuid | Required when `route=collection`. |
-
-Response:
-
-```json
-{
-  "status": "success",
-  "access_level": "free|plus|premium",
-  "data": [
-    {
-      "id": "collection-uuid",
-      "comment": "...",
-      "original_path": "...",
-      "tier": "free",
-      "images": [
-        { "id": "image-uuid", "api_url": "/api/assets/<collection-uuid>/<image-uuid>.webp", "comment": "...", "tier": "free" }
-      ]
-    }
-  ]
-}
-```
-
-Error responses use `{"status":"error","message":"..."}` with the
-appropriate HTTP status: `400` invalid route/missing `id`, `401` malformed
-token, `403` token rejected (not found / inactive / expired) or tier too
-low for the requested collection, `404` collection not found, `405` non-GET
-method, `429` rate limit exceeded.
-
-### 5.2 `GET /v1/` — new catalog resources
-
-No legacy equivalent. Same token scheme as `/api/`, simpler response
-envelope.
+Tokens are accepted, in order of precedence, as: `?token=...` query
+parameter, `X-API-Token` header, or `Authorization: Bearer ...` header.
+CORS origin is controlled by `API_ALLOWED_ORIGIN` in `.env`.
 
 | `resource` | Extra parameters | Notes |
 |---|---|---|
 | `grid-sizes` | — | Returns all active grids visible at the caller's tier, shaped for `GridSizes.js` (camelCase keys: `cellWidth`, `cellHeight`, `cellPadding`, `pageMargin`, `cellGap`, `cellLines`, `cellColumns`, `cellSpacing`, `cellSlots`). |
 | `album-templates` | — | Returns all active templates visible at the caller's tier. |
 | `phrases` | `category`, `language`, `limit` (default 50, max 200) | Filters before tier-gating and limiting; `category`/`language` are optional. |
+| `assets` / `backgrounds` / `overlays` / `collection` | `id` (required for `collection`) | Asset collections/images (overlays & backgrounds library). |
 
-Response: `{"status":"success","access_level":"...","data":[...]}`. Same
-error codes as `/api/`, except there is no `404` case (an unknown
-`resource` is a `400`).
+Response: `{"status":"success","access_level":"free|plus|premium","data":[...]}`.
+For asset collections, each image's `api_url` is the file's real public
+path, e.g. `/v1/assets/<collection-uuid>/<image-uuid>.webp`.
+
+Error responses use `{"status":"error","message":"..."}` with the
+appropriate HTTP status: `400` invalid/unknown resource or missing `id`,
+`401` malformed token, `403` token rejected (not found / inactive /
+expired) or tier too low, `404` collection not found, `405` non-GET
+method, `429` rate limit exceeded.
 
 ## 6. Admin Panel
 
@@ -328,7 +308,7 @@ Environment variables (`.env`, parsed by `env()` in `bootstrap.php`):
 |---|---|---|
 | `APP_DEBUG` | `0` | Show PHP errors on screen. Keep `0` in production; errors are always logged regardless. |
 | `APP_TIMEZONE` | `America/Sao_Paulo` | Timezone for generated timestamps. |
-| `API_ALLOWED_ORIGIN` | `*` | CORS origin allowed on `/api/` and `/v1/`. Set to the PWA's real production origin. |
+| `API_ALLOWED_ORIGIN` | _(none — must be set)_ | CORS origin allowed on `/v1/`. Set to the PWA's real production origin; avoid `*` outside local development. |
 | `API_RATE_LIMIT_PER_IP` | `120` | Requests allowed per window, per IP, on the public APIs. |
 | `API_RATE_LIMIT_WINDOW_SECONDS` | `60` | Window size, in seconds, for the above. |
 
@@ -347,8 +327,9 @@ One-time import of the legacy system's `api/api/data.json` and
 `api/api/tokens.json` into the new SQLite database.
 
 * Collection and image IDs from the legacy JSON are preserved as the
-  `uuid` column, so URLs already in use by `ApiPicker.js`
-  (`/api/assets/<id>/<id>.webp`) keep working without any client change.
+  `uuid` column, and physical files are copied to `public/v1/assets/<id>/<id>.webp`
+  — the same path scheme `ApiPicker.js` already requests via `/v1/`, so no
+  client change is needed.
 * The token already in production is migrated as a SHA-256 hash; the plain
   value is never written to the new database.
 * Physical `.webp` files are copied only if found on disk, trying first the
@@ -369,9 +350,9 @@ functional test pass are required before any production deployment.**
 Beyond that baseline check, recommended next steps:
 
 * **Automated tests** — there is currently no test suite. At minimum,
-  contract tests for `/api/` and `/v1/` (status codes, response shape,
-  tier-gating) and unit tests for the security helpers
-  (`rateLimitCheck`, `tierAtLeast`, CSRF) would catch regressions early.
+  contract tests for `/v1/` (status codes, response shape, tier-gating) and
+  unit tests for the security helpers (`rateLimitCheck`, `tierAtLeast`,
+  CSRF) would catch regressions early.
 * **Token rotation** — tokens have no built-in rotation workflow; consider
   adding a "reissue" action that retires the old hash and returns a new raw
   value in one step, so customers aren't left without access during

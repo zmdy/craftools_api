@@ -191,8 +191,8 @@ foreach ($stats as $key => $val) {
 if ($stats['images_file_missing'] > 0) {
     echo "\n[ATENÇÃO] {$stats['images_file_missing']} imagem(ns) foram registradas no banco mas o arquivo .webp\n";
     echo "não foi encontrado em nenhum dos caminhos legados verificados. As URLs públicas\n";
-    echo "(/api/assets/<coleção>/<imagem>.webp) vão retornar 404 até que você reenvie o\n";
+    echo "(/v1/assets/<coleção>/<imagem>.webp) vão retornar 404 até que você reenvie o\n";
     echo "arquivo correspondente pelo painel (Overlays & Fundos → coleção → enviar imagem)\n";
-    echo "ou copie manualmente o arquivo .webp para public/api/assets/<coleção>/<imagem>.webp.\n";
+    echo "ou copie manualmente o arquivo .webp para public/v1/assets/<coleção>/<imagem>.webp.\n";
 }
 echo "\nMigração concluída.\n";

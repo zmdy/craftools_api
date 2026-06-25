@@ -22,8 +22,8 @@ $recentAudit = db()->query('SELECT * FROM audit_log ORDER BY id DESC LIMIT 8')->
             imagens de overlay/fundo e o banco de frases motivacionais.
         </p>
         <p style="margin:0;color:var(--text-secondary);font-size:13.5px;">
-            A API pública compatível com o app legado fica em <code>/api/</code>; os novos endpoints (grids,
-            templates, frases) ficam em <code>/v1/</code>.
+            A API pública usada pelo PWA fica em <code>/v1/</code> (grids, templates de álbum, frases e
+            coleções de overlay/fundo).
         </p>
     </div>
 </div>

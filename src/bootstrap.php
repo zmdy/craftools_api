@@ -4,8 +4,8 @@
  *
  * Ponto de entrada comum a todo o sistema (painel admin + APIs públicas).
  * Define caminhos, lê o .env, configura erros/sessão com segurança e carrega
- * os demais módulos. Todo arquivo público (public/index.php, public/api/...,
- * public/v1/...) deve começar com:
+ * os demais módulos. Todo arquivo público (public/index.php, public/v1/...)
+ * deve começar com:
  *
  *     require_once __DIR__ . '/../src/bootstrap.php';
  */

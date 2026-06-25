@@ -77,25 +77,22 @@ across views — see [Security](#security) below.
 
 ## Public API
 
-### `GET /api/?route=all|backgrounds|overlays|collection`
-Contract-compatible with the legacy project (`api/api/index.php`): same
-response shape, same parameters, same token precedence
-(`?token=...` → `X-API-Token` header → `Authorization: Bearer ...`). The
-PWA's existing `ApiPicker.js` works against this endpoint unmodified.
-
-One deliberate behavior change: the legacy backend rejected requests with no
-token (`401`). Here, an absent token is treated as anonymous `free`-tier
-access, since a tiered plan model needs a no-login free tier; tokens that
-are present but invalid, inactive, or expired are still rejected.
+### `GET /v1/?resource=grid-sizes|album-templates|phrases|assets|backgrounds|overlays|collection`
+Tokens accepted, in order of precedence: `?token=...` → `X-API-Token` header
+→ `Authorization: Bearer ...`. An absent token is treated as anonymous
+`free`-tier access, since a tiered plan model needs a no-login free tier;
+tokens that are present but invalid, inactive, or expired are rejected.
+`phrases` additionally accepts `category`, `language`, and `limit` (capped
+at 200). The PWA's `ApiPicker.js`/`ApiDataLoader.js` consume this endpoint
+exclusively.
 
 Response: `{"status":"success","access_level":"free|plus|premium","data":[...]}`
 
-### `GET /v1/?resource=grid-sizes|album-templates|phrases`
-New resources with no legacy equivalent, authenticated the same way as
-`/api/`. `phrases` additionally accepts `category`, `language`, and `limit`
-(capped at 200).
-
-Response: `{"status":"success","access_level":"...","data":[...]}`
+> **Note:** an earlier design also planned a second, legacy-compatible
+> endpoint at `/api/?route=...`. It was never implemented — `public/` only
+> ships `v1/` — and nothing in the current PWA calls it. See
+> [`docs/DOCUMENTATION.md`](docs/DOCUMENTATION.md#5-public-api-reference)
+> for details.
 
 ## Security
 
@@ -147,11 +144,13 @@ recommended before a production rollout.
     ```
     php bin/migrate_legacy.php
     ```
-    This preserves the original collection/image IDs (the URLs already used
-    by `ApiPicker.js` keep working) and converts the API token already in
-    production to a hash, without ever exposing the plain value. Read the
-    summary printed at the end: images whose physical file isn't found on
-    disk will need to be re-uploaded manually through the panel.
+    This preserves the original collection/image IDs and copies the
+    physical files to `public/v1/assets/<id>/<id>.webp` — the same path
+    `ApiPicker.js` already requests via `/v1/`, so no client change is
+    needed — and converts the API token already in production to a hash,
+    without ever exposing the plain value. Read the summary printed at the
+    end: images whose physical file isn't found on disk will need to be
+    re-uploaded manually through the panel.
 5.  Sign in at `/index.php?page=login` with the e-mail/password created in
     step 3.
 
@@ -170,9 +169,9 @@ craftools_api/
 │   ├── actions.php           handles every panel POST
 │   ├── views/                one view per panel section
 │   ├── assets/                admin.css / admin.js (same look as the PWA)
-│   ├── api/index.php         public API — legacy-compatible
-│   ├── api/assets/            generated .webp files, served statically
-│   └── v1/index.php          public API — new resources (grids, templates, phrases)
+│   └── v1/
+│       ├── index.php          public API (grids, templates, phrases, asset collections)
+│       └── assets/            generated .webp files, served statically
 ├── src/                     application logic (not web-accessible)
 │   ├── bootstrap.php          env, session, requires
 │   ├── db.php                 SQLite connection + generic CRUD helpers

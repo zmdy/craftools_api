@@ -1,9 +1,9 @@
 <?php
 /**
- * public/v1/index.php — endpoints NOVOS da API pública (sem equivalente no
- * projeto legado): tamanhos de grid, templates de álbum e banco de frases.
- * Usa o mesmo esquema de token/tier de /api/ (resolveApiToken()), mas com
- * formato de resposta mais simples: {status, data}.
+ * public/v1/index.php — API pública do CrafTools (única servida por este
+ * projeto): tamanhos de grid, templates de álbum, banco de frases e
+ * coleções de overlay/fundo. Usa resolveApiToken() para token/tier, com
+ * formato de resposta simples: {status, data}.
  *
  * Uso: /v1/?resource=grid-sizes
  *      /v1/?resource=album-templates

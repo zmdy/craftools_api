@@ -113,6 +113,14 @@ function processAndConvertToWebp(string $source, string $destination, int $maxWi
         case IMAGETYPE_WEBP:
             $image = @imagecreatefromwebp($source);
             break;
+        case IMAGETYPE_GIF:
+            // bulk_import_original() em public/actions.php aceita .gif na whitelist
+            // de extensões; sem este case, essa conversão sempre falhava com
+            // "Formato de imagem não suportado" (engolido silenciosamente pelo
+            // catch do import em lote). GIFs animados ficam só com o primeiro
+            // quadro — esperado, já que a saída é sempre uma imagem estática.
+            $image = @imagecreatefromgif($source);
+            break;
         default:
             throw new RuntimeException('Formato de imagem não suportado.');
     }

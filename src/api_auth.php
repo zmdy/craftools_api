@@ -1,14 +1,14 @@
 <?php
 /**
- * api_auth.php — resolução de token e nível de acesso (tier) para as APIs
- * PÚBLICAS (/api legado e /v1 novo).
+ * api_auth.php — resolução de token e nível de acesso (tier) para a API
+ * PÚBLICA (/v1).
  *
- * Compatibilidade: o contrato legado (api/api/index.php) sempre exigia um
- * token. Aqui, a ausência de token é tratada como tier "free" (decisão de
- * produto: o tier gratuito do CraftTools+ não exige login/token, conforme
- * definido no plano de tiers). Tokens enviados continuam funcionando
- * exatamente como antes — apenas o *hash* SHA-256 é comparado, nunca o valor
- * em texto puro.
+ * Compatibilidade: o contrato do projeto legado (api/api/index.php, fora
+ * deste repositório) sempre exigia um token. Aqui, a ausência de token é
+ * tratada como tier "free" (decisão de produto: o tier gratuito do
+ * CraftTools+ não exige login/token, conforme definido no plano de tiers).
+ * Tokens enviados continuam funcionando exatamente como antes — apenas o
+ * *hash* SHA-256 é comparado, nunca o valor em texto puro.
  */
 
 const TIER_RANK = ['free' => 0, 'plus' => 1, 'premium' => 2];
