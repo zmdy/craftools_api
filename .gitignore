@@ -16,6 +16,14 @@ storage/incoming/backgrounds/*
 storage/incoming/overlays/*
 !storage/incoming/overlays/.gitkeep
 
+# Original images dropped here for bulk import (public/views/bulk_import.php).
+# Never committed — can be large/copyrighted; only the folder structure ships
+# via .gitkeep. Converted output goes to public/v1/assets as .webp.
+assets/original/backgrounds/*
+!assets/original/backgrounds/.gitkeep
+assets/original/overlays/*
+!assets/original/overlays/.gitkeep
+
 # Generated WebP assets served by the public API
 public/v1/assets/*
 !public/v1/assets/.gitkeep
