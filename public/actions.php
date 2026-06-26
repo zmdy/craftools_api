@@ -184,83 +184,12 @@ try {
                 flashRedirect('success', 'Coleção e imagens removidas.', 'index.php?page=assets');
             }
 
-            if ($action === 'bulk_import_original') {
-                $baseDir = CRAFTOOLS_API_ROOT . '/assets/original';
-                if (!is_dir($baseDir)) {
-                    flashRedirect('error', 'A pasta assets/original não existe.', 'index.php?page=assets');
-                }
-                
-                $importedCollections = 0;
-                $importedImages = 0;
-                
-                $types = ['backgrounds' => 'background', 'overlays' => 'overlay'];
-                
-                foreach ($types as $folder => $typeStr) {
-                    $typeDir = $baseDir . '/' . $folder;
-                    if (!is_dir($typeDir)) continue;
-                    
-                    $iterator = new DirectoryIterator($typeDir);
-                    foreach ($iterator as $dirInfo) {
-                        if ($dirInfo->isDot() || !$dirInfo->isDir()) continue;
-                        
-                        $collectionName = $dirInfo->getFilename();
-                        $colPath = $typeDir . '/' . $collectionName;
-                        
-                        // Create collection
-                        $colId = assetCollectionCreate([
-                            'type' => $typeStr,
-                            'tier' => 'free',
-                            'sort_order' => 0,
-                            'comment' => $collectionName,
-                            'original_path' => 'assets/original/' . $folder . '/' . $collectionName,
-                            'active' => 1
-                        ]);
-                        $importedCollections++;
-                        
-                        $col = assetCollectionFind($colId);
-                        
-                        // Process images
-                        $filesIt = new DirectoryIterator($colPath);
-                        foreach ($filesIt as $fileInfo) {
-                            if ($fileInfo->isDot() || !$fileInfo->isFile()) continue;
-                            
-                            $ext = strtolower($fileInfo->getExtension());
-                            if (!in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif'])) continue;
-                            
-                            $imgUuid = uuidv4();
-                            $destPath = CRAFTOOLS_API_ROOT . '/public/v1/assets/' . $col['uuid'] . '/' . $imgUuid . '.webp';
-                            
-                            $destDir = dirname($destPath);
-                            if (!is_dir($destDir)) {
-                                mkdir($destDir, 0775, true);
-                            }
-                            
-                            try {
-                                [$width, $height] = processAndConvertToWebp($fileInfo->getPathname(), $destPath, IMG_MAX_WIDTH, IMG_WEBP_QUALITY);
-                                
-                                $newImgId = assetImageCreate([
-                                    'collection_id' => $colId,
-                                    'original_name' => $fileInfo->getFilename(),
-                                    'file_path' => 'v1/assets/' . $col['uuid'] . '/' . $imgUuid . '.webp',
-                                    'width' => $width,
-                                    'height' => $height,
-                                    'size_bytes' => (int) filesize($destPath),
-                                    'comment' => '',
-                                    'tier' => 'free'
-                                ]);
-                                
-                                db()->prepare('UPDATE asset_images SET uuid = ? WHERE id = ?')->execute([$imgUuid, $newImgId]);
-                                auditLog($adminId, 'create', 'asset_images', (string) $newImgId);
-                                $importedImages++;
-                            } catch (Exception $e) {
-                                // Skip failing images silently during bulk import
-                            }
-                        }
-                    }
-                }
-                
-                flashRedirect('success', "Importação concluída: $importedCollections coleções e $importedImages imagens adicionadas.", 'index.php?page=bulk_import');
-            }
+            // A importação em massa (tela "bulk_import") não passa mais por aqui:
+            // ela usa public/bulk_import_ajax.php, em lotes pequenos via AJAX, o
+            // que permite mostrar uma barra de progresso real em vez de uma única
+            // requisição síncrona. Note também que esta ação nunca era executada
+            // de qualquer forma — $page vale 'bulk_import' nesse POST, e não havia
+            // "case 'bulk_import':" neste switch, só "case 'assets':".
 
             if ($action === 'image_upload') {
                 $collectionId = (int) ($_POST['collection_id'] ?? 0);

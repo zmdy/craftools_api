@@ -344,6 +344,19 @@ function assetCollectionFindByUuid(string $uuid): ?array {
     return repoFindByUuid('asset_collections', $uuid);
 }
 
+/**
+ * Busca uma coleção pelo seu original_path (ex.: "assets/original/backgrounds/praia").
+ * Usado pela importação em massa para reaproveitar a coleção já criada em uma
+ * chamada anterior, já que o processamento acontece em lotes (várias
+ * requisições AJAX sequenciais) em vez de uma única requisição síncrona.
+ */
+function assetCollectionFindByOriginalPath(string $originalPath): ?array {
+    $stmt = db()->prepare('SELECT * FROM asset_collections WHERE original_path = ? LIMIT 1');
+    $stmt->execute([$originalPath]);
+    $row = $stmt->fetch();
+    return $row !== false ? $row : null;
+}
+
 function assetCollectionCreate(array $d): int {
     return repoInsert('asset_collections', [
         'uuid' => uuidv4(),
