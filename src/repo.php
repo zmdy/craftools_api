@@ -253,8 +253,22 @@ function albumTemplateRowFromInput(array $d): array {
 // phrases — banco de frases (autor / frase / categoria / idioma)
 // ============================================================================
 
-function phraseList(): array {
-    return repoList('phrases', 'created_at DESC');
+function phraseList(?string $filterCategory = null, ?string $filterAuthor = null): array {
+    $sql = 'SELECT * FROM phrases WHERE 1=1';
+    $params = [];
+    if ($filterCategory !== null && $filterCategory !== '') {
+        // category é CSV: "amor,motivacional" — busca categoria exata dentro do vetor
+        $sql .= " AND (',' || category || ',' LIKE ?)";
+        $params[] = '%,' . $filterCategory . ',%';
+    }
+    if ($filterAuthor !== null && $filterAuthor !== '') {
+        $sql .= ' AND author = ?';
+        $params[] = $filterAuthor;
+    }
+    $sql .= ' ORDER BY created_at DESC';
+    $stmt = db()->prepare($sql);
+    $stmt->execute($params);
+    return $stmt->fetchAll();
 }
 
 function phraseFind(int $id): ?array {
@@ -265,8 +279,9 @@ function phraseListActiveForTier(string $tier, ?string $category = null, ?string
     $sql = 'SELECT * FROM phrases WHERE active = 1';
     $params = [];
     if ($category !== null && $category !== '') {
-        $sql .= ' AND category = ?';
-        $params[] = $category;
+        // suporta múltiplas categorias armazenadas como CSV
+        $sql .= " AND (',' || category || ',' LIKE ?)";
+        $params[] = '%,' . $category . ',%';
     }
     if ($language !== null && $language !== '') {
         $sql .= ' AND language = ?';
@@ -281,11 +296,12 @@ function phraseListActiveForTier(string $tier, ?string $category = null, ?string
         if (!tierAtLeast($tier, $row['tier'])) {
             continue;
         }
+        $cats = array_values(array_filter(array_map('trim', explode(',', $row['category'] ?? ''))));
         $out[] = [
             'id' => $row['uuid'],
             'phrase' => $row['phrase'],
             'author' => $row['author'],
-            'category' => $row['category'],
+            'category' => $cats,
             'language' => $row['language'],
             'tier' => $row['tier'],
         ];
@@ -310,21 +326,53 @@ function phraseDelete(int $id): void {
     repoDelete('phrases', $id);
 }
 
+/**
+ * Normaliza categorias vindas de qualquer fonte (string CSV ou array) em string CSV limpa.
+ * Ex: "  amor , motivacional " → "amor,motivacional"
+ */
+function phraseNormalizeCategory($raw): string {
+    if (is_array($raw)) {
+        $parts = $raw;
+    } else {
+        $parts = explode(',', (string) $raw);
+    }
+    $parts = array_values(array_unique(array_filter(array_map('trim', $parts))));
+    return implode(',', $parts);
+}
+
 function phraseRowFromInput(array $d): array {
     return [
-        'uuid' => $d['uuid'] ?? uuidv4(),
-        'phrase' => trim($d['phrase']),
-        'author' => trim($d['author'] ?? ''),
-        'category' => trim($d['category'] ?? ''),
-        'language' => $d['language'] !== '' ? $d['language'] : 'pt-br',
-        'tier' => $d['tier'],
-        'active' => !empty($d['active']) ? 1 : 0,
+        'uuid'     => $d['uuid'] ?? uuidv4(),
+        'phrase'   => trim($d['phrase']),
+        'author'   => trim($d['author'] ?? ''),
+        'category' => phraseNormalizeCategory($d['category'] ?? ''),
+        'language' => ($d['language'] ?? '') !== '' ? $d['language'] : 'pt-br',
+        'tier'     => $d['tier'],
+        'active'   => !empty($d['active']) ? 1 : 0,
     ];
 }
 
+/** Retorna lista de categorias individuais distintas (expande o CSV de cada linha). */
 function phraseCategories(): array {
     $rows = db()->query("SELECT DISTINCT category FROM phrases WHERE category IS NOT NULL AND category <> '' ORDER BY category")->fetchAll();
-    return array_column($rows, 'category');
+    $all = [];
+    foreach ($rows as $row) {
+        foreach (explode(',', $row['category']) as $cat) {
+            $cat = trim($cat);
+            if ($cat !== '') {
+                $all[$cat] = true;
+            }
+        }
+    }
+    $keys = array_keys($all);
+    sort($keys);
+    return $keys;
+}
+
+/** Retorna lista de autores distintos. */
+function phraseAuthors(): array {
+    $rows = db()->query("SELECT DISTINCT author FROM phrases WHERE author IS NOT NULL AND author <> '' ORDER BY author")->fetchAll();
+    return array_column($rows, 'author');
 }
 
 // ============================================================================

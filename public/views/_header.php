@@ -19,7 +19,8 @@ $pageTitles = [
     'album_templates' => ['Templates de Álbum', 'Modelos de capa e diagramação'],
     'assets' => ['Overlays & Fundos', 'Coleções de imagens de overlay e background'],
     'bulk_import' => ['Importação em Massa', 'Importe coleções de imagens automaticamente'],
-    'phrases' => ['Banco de Frases', 'Frases motivacionais por autor/categoria/idioma'],
+    'phrases'            => ['Banco de Frases', 'Frases motivacionais por autor/categoria/idioma'],
+    'phrases_csv_import' => ['Importar Frases via CSV', 'Importação em massa de frases'],
 ];
 $title = $pageTitles[$page][0] ?? 'CraftTools API';
 $subtitle = $pageTitles[$page][1] ?? '';
