@@ -1,0 +1,2170 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Photo Layout — CrafTools</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Serif+Display&display=swap">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200">
+    <link rel="stylesheet" href="/craftools/craftools/craftools.css">
+
+    <style>
+        *, *::before, *::after { box-sizing: border-box; }
+
+        :root {
+            --topbar-h: 48px;
+            --footer-h: 68px;
+            --accent: #f97316;
+            --bg-app: #f4f4f5;
+            --bg-shell: #ffffff;
+            --border: #e4e4e7;
+            --text-primary: #18181b;
+            --text-secondary: #71717a;
+            --radius: 8px;
+            --canvas-bg: #e4e4e7; /* same dotted-grid canvas tone as craftools.css .craftools-canvas */
+        }
+
+        html, body {
+            margin: 0; padding: 0; height: 100%; overflow: hidden;
+            font-family: 'DM Sans', sans-serif;
+            background: var(--bg-app);
+            color: var(--text-primary);
+        }
+
+        #app { height: 100vh; display: flex; flex-direction: column; }
+        /* .step now only fills the space between the persistent topbar/footer below,
+           instead of the full app height (previously each step owned its own topbar). */
+        .step { display: none; flex: 1 1 auto; min-height: 0; flex-direction: column; }
+        .step.active { display: flex; }
+
+        /* ── App topbar (persistent across every step, same look on mobile/desktop,
+               mirrors the "box-icon" circular-button style used in index.html) ──── */
+        #app-topbar {
+            height: var(--topbar-h);
+            background: var(--bg-shell);
+            border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; gap: 8px; padding: 0 16px;
+            flex-shrink: 0; z-index: 10;
+        }
+        .app-logo { font-family: 'DM Serif Display', serif; font-size: 16px; color: var(--accent); white-space: nowrap; }
+        .topbar-spacer { flex: 1; }
+        .box-icon {
+            width: 35px; height: 35px; border-radius: 50%; flex-shrink: 0;
+            border: none; background: var(--bg-input, #f4f4f5);
+            display: flex; align-items: center; justify-content: center;
+            color: var(--text-secondary); cursor: pointer; transition: all 0.15s;
+        }
+        .box-icon .material-symbols-outlined { font-size: 20px; }
+        .box-icon:hover { background: var(--accent-subtle, #fff7ed); color: var(--accent); }
+        .box-icon:disabled { opacity: 0.4; cursor: not-allowed; }
+        .box-icon:disabled:hover { background: var(--bg-input, #f4f4f5); color: var(--text-secondary); }
+        .box-icon[hidden] { display: none; }
+
+        /* ── App footer (persistent across every step; content swapped per step) ── */
+        #app-footer {
+            background: var(--bg-shell);
+            border-top: 1px solid var(--border);
+            flex-shrink: 0; position: relative; z-index: 20;
+        }
+        .app-footer-content { display: none; align-items: center; width: 100%; height: var(--footer-h); padding: 0 16px; gap: 6px; }
+        .app-footer-content.active { display: flex; }
+        .app-footer-cta { width: 100%; }
+        .app-footer-cta .btn-large { width: 100%; justify-content: center; }
+
+        /* ── Step progress ─────────────────────────────────────────────── */
+        #step-progress, .step-progress-bar {
+            display: flex; align-items: center; justify-content: center;
+            gap: 8px; padding: 14px 0;
+            background: var(--bg-shell);
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+        .sp-dot { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: var(--text-secondary); }
+        .sp-dot .circle {
+            width: 22px; height: 22px; border-radius: 50%;
+            border: 2px solid var(--border);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 11px; font-weight: 600; color: var(--text-secondary);
+            transition: all 0.2s;
+        }
+        .sp-dot.done .circle { background: var(--accent); border-color: var(--accent); color: white; }
+        .sp-dot.current .circle { border-color: var(--accent); color: var(--accent); }
+        .sp-dot.current span.label { color: var(--text-primary); font-weight: 600; }
+        .sp-line { width: 36px; height: 2px; background: var(--border); }
+        .sp-line.done { background: var(--accent); }
+
+        /* ── STEP 1 — WELCOME ──────────────────────────────────────────── */
+        #step-welcome {
+            align-items: center; justify-content: center;
+            background:
+                radial-gradient(circle at 20% 20%, rgba(249,115,22,0.06), transparent 45%),
+                radial-gradient(circle at 80% 80%, rgba(249,115,22,0.05), transparent 45%),
+                var(--bg-app);
+        }
+        .welcome-card { max-width: 480px; text-align: center; padding: 40px; }
+        .welcome-card .w-icon {
+            width: 72px; height: 72px; border-radius: 20px;
+            background: linear-gradient(135deg, var(--accent), #fb923c);
+            display: flex; align-items: center; justify-content: center;
+            margin: 0 auto 24px;
+            box-shadow: 0 12px 32px rgba(249,115,22,0.28);
+        }
+        .welcome-card .w-icon .material-symbols-outlined { font-size: 36px; color: white; }
+        .welcome-card h1 {
+            font-family: 'DM Serif Display', serif;
+            font-size: 30px; font-weight: 400; margin: 0 0 12px;
+            letter-spacing: -0.5px;
+        }
+        .welcome-card p { font-size: 14px; line-height: 1.6; color: var(--text-secondary); margin: 0 0 28px; }
+        .welcome-features { display: flex; justify-content: center; gap: 22px; margin-bottom: 32px; }
+        .wf-item { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+        .wf-item .material-symbols-outlined { font-size: 22px; color: var(--accent); }
+        .wf-item span.wf-label { font-size: 11px; color: var(--text-secondary); font-weight: 500; }
+
+        /* ── STEP 2 — UPLOAD ───────────────────────────────────────────── */
+        #step-upload { align-items: center; overflow-y: auto; }
+        .upload-shell { width: 100%; max-width: 640px; margin: 0 auto; padding: 36px 24px 48px; }
+        .upload-shell h2 {
+            font-family: 'DM Serif Display', serif;
+            font-size: 24px; font-weight: 400; margin: 0 0 6px; text-align: center;
+        }
+        .upload-shell .sub { font-size: 13px; color: var(--text-secondary); text-align: center; margin: 0 0 28px; }
+        .picker-row { display: flex; gap: 12px; margin-bottom: 24px; }
+        .picker-field { flex: 1; }
+        .picker-field label {
+            display: block; font-size: 11px; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 0.6px;
+            color: var(--text-secondary); margin-bottom: 6px;
+        }
+        .picker-select {
+            width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border);
+            font-family: 'DM Sans', sans-serif; font-size: 13px;
+            background: white; color: var(--text-primary); cursor: pointer;
+        }
+        .picker-select:focus { outline: none; border-color: var(--accent); }
+        #drop-zone {
+            border: 2px dashed var(--border); border-radius: 14px; padding: 36px 20px;
+            text-align: center; cursor: pointer; transition: all 0.15s; margin-bottom: 20px;
+        }
+        #drop-zone:hover, #drop-zone.drag-over { border-color: var(--accent); background: #fff7ed; }
+        #drop-zone .dz-icon { font-size: 40px; color: var(--text-secondary); display: block; margin-bottom: 10px; }
+        #drop-zone .dz-text { font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
+        #drop-zone .dz-text strong { color: var(--accent); }
+        #file-input { display: none; }
+        #thumb-list {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+            gap: 8px; margin-bottom: 20px;
+        }
+        .thumb-item {
+            position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden;
+            border: 2px solid transparent; transition: border-color 0.12s;
+        }
+        .thumb-item:hover { border-color: var(--accent); }
+        .thumb-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .thumb-remove {
+            position: absolute; top: 4px; right: 4px; width: 20px; height: 20px;
+            background: rgba(0,0,0,0.65); border-radius: 50%; border: none; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            opacity: 0; transition: opacity 0.12s; color: white; font-size: 11px;
+        }
+        .thumb-item:hover .thumb-remove { opacity: 1; }
+        #photos-count { text-align: center; font-size: 12px; color: var(--text-secondary); margin-bottom: 24px; }
+        /* ── STEP — QUALITY ────────────────────────────────────────────── */
+        #step-quality { align-items: center; overflow-y: auto; }
+        .quality-shell { width: 100%; max-width: 680px; margin: 0 auto; padding: 36px 24px 48px; }
+        .quality-shell h2 { font-family: 'DM Serif Display', serif; font-size: 24px; font-weight: 400; margin: 0 0 6px; text-align: center; }
+        .quality-shell .sub { font-size: 13px; color: var(--text-secondary); text-align: center; margin: 0 0 24px; }
+        .quality-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px; }
+        .quality-item {
+            display: flex; align-items: center; gap: 12px; padding: 10px;
+            border-radius: 10px; border: 1px solid var(--border); background: white;
+        }
+        .quality-item.low-dpi { border-color: #fca5a5; background: #fef2f2; }
+        .quality-item.mid-dpi { border-color: #fde68a; background: #fffbeb; }
+        .qi-thumb { width: 56px; height: 56px; border-radius: 8px; overflow: hidden; flex-shrink: 0; }
+        .qi-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .qi-info { flex: 1; min-width: 0; }
+        .qi-name { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 3px; }
+        .qi-meta { font-size: 11px; color: var(--text-secondary); }
+        .qi-warning { display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; color: #b91c1c; margin-top: 5px; }
+        .qi-warning.mid { color: #b45309; }
+        .qi-warning .material-symbols-outlined { font-size: 14px; }
+        .qi-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; }
+        .qi-badge { display: flex; align-items: center; gap: 4px; padding: 4px 9px; border-radius: 20px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+        .qi-badge .material-symbols-outlined { font-size: 14px; }
+        .qi-badge.good { background: #dcfce7; color: #15803d; }
+        .qi-badge.mid  { background: #fef3c7; color: #b45309; }
+        .qi-badge.low  { background: #fee2e2; color: #b91c1c; }
+        .qi-replace-btn {
+            display: flex; align-items: center; gap: 4px; padding: 5px 10px; border-radius: 7px;
+            border: 1px solid var(--accent); background: white; color: var(--accent);
+            font-family: 'DM Sans', sans-serif; font-size: 11px; font-weight: 600;
+            cursor: pointer; white-space: nowrap; transition: all 0.12s;
+        }
+        .qi-replace-btn:hover { background: var(--accent); color: white; }
+        .qi-replace-btn .material-symbols-outlined { font-size: 14px; }
+        .quality-summary {
+            display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 10px;
+            margin-bottom: 22px; font-size: 12px;
+        }
+        .quality-summary.ok { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; }
+        .quality-summary.warn { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; }
+        .quality-summary .material-symbols-outlined { font-size: 20px; }
+        /* ── Shared buttons ────────────────────────────────────────────── */
+        .btn-large {
+            display: inline-flex; align-items: center; gap: 8px;
+            padding: 13px 28px; background: var(--accent); color: white;
+            border: none; border-radius: 10px;
+            font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 600;
+            cursor: pointer; transition: all 0.15s;
+            box-shadow: 0 8px 20px rgba(249,115,22,0.28);
+        }
+        .btn-large:hover { background: #ea6c0a; transform: translateY(-1px); }
+        .btn-large .material-symbols-outlined { font-size: 18px; }
+
+        /* ── STEP — EDIT ───────────────────────────────────────────────── */
+        #step-edit { overflow: hidden; }
+
+        /* Main area: full width, fills between topbar and footer */
+        #edit-main {
+            flex: 1; overflow: hidden; position: relative;
+        }
+
+        /* Hidden board — used only for caption craftools-elements storage */
+        #photo-board {
+            position: absolute; left: -9999px; visibility: hidden;
+            width: 420px; height: 297px; overflow: visible;
+        }
+
+        /* ── Gallery/carousel view ───────────────────────────────────────
+               Same light dotted-grid canvas as craftools's main editor
+               (.craftools-canvas in craftools/craftools.css) instead of the
+               previous dark cinema-style backdrop. ─────────────────────── */
+        #gallery-view {
+            position: absolute; inset: 0;
+            background-color: var(--canvas-bg, #e4e4e7);
+            background-image: radial-gradient(circle, rgba(0,0,0,.08) 1px, transparent 1px);
+            background-size: 20px 20px;
+            display: flex; align-items: center; overflow: hidden;
+        }
+
+        #gallery-track {
+            display: flex; align-items: center;
+            gap: 20px;
+            /* horizontal padding set by JS to half-viewport minus half-slide-width */
+            overflow-x: auto;
+            scroll-snap-type: x mandatory;
+            scroll-behavior: smooth;
+            -webkit-overflow-scrolling: touch;
+            height: 100%;
+            width: 100%;
+            scrollbar-width: none;
+        }
+        #gallery-track::-webkit-scrollbar { display: none; }
+
+        .gallery-slide {
+            scroll-snap-align: center;
+            flex-shrink: 0;
+            /* w/h set by JS from template cellWidth/cellHeight ratio */
+            border-radius: 4px;
+            overflow: hidden;
+            transition: transform 0.35s cubic-bezier(0.22,1,0.36,1), opacity 0.35s, box-shadow 0.35s;
+            opacity: 0.6;
+            transform: scale(0.82);
+            cursor: pointer;
+            position: relative;
+            background: #ffffff;
+            /* On the light dotted canvas, unfocused pages still need to read as
+               "paper" (previously relied on the dark backdrop for separation). */
+            box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+        }
+        .gallery-slide.active {
+            opacity: 1; transform: scale(1);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+        }
+        /* Background layer — behind the photo, fills the whole cell (slide or strip
+           slot). Set via the "Fundo" tool, which reuses craftools/tools/album/
+           CellBackground.js — same mechanism the Album editor uses for grid cells. */
+        .cell-content-layer {
+            position: absolute; inset: 0;
+        }
+        /* Overlay layer — on top of the photo, inset to match the photo's own bounds. */
+        .cell-overlay-layer {
+            position: absolute;
+            z-index: 1;
+            pointer-events: none;
+            background-size: cover;
+            background-position: center center;
+            background-repeat: no-repeat;
+        }
+        /* Image area — inset by the cell padding, same as scatter */
+        .gallery-img-area {
+            position: absolute;
+            overflow: hidden;
+        }
+        .gallery-img-area img {
+            width: 100%; height: 100%; object-fit: cover; display: block;
+            pointer-events: none; user-select: none;
+        }
+        /* Caption area — lives in the bottom padding zone (e.g. polaroid white space) */
+        .gallery-caption {
+            position: absolute;
+            left: 0; right: 0; bottom: 0;
+            display: flex; align-items: center; justify-content: center;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 11px; font-weight: 500;
+            color: #333; text-align: center;
+            padding: 4px 10px;
+            line-height: 1.3;
+            transition: background 0.12s;
+            z-index: 3;
+            overflow: hidden;
+            white-space: pre-wrap;
+        }
+        /* Photo index badge inside gallery slide */
+        .gallery-slide-num {
+            position: absolute; top: 8px; right: 8px;
+            font-size: 10px; font-weight: 700; color: rgba(255,255,255,0.9);
+            background: rgba(0,0,0,0.4); padding: 2px 6px; border-radius: 20px;
+            z-index: 2;
+        }
+
+        /* ── Photostrip (tirinha) inner grid — several photos inside one strip ── */
+        .gallery-strip-grid {
+            position: absolute;
+            display: grid;
+            box-sizing: border-box;
+        }
+        .gallery-strip-slot {
+            position: relative;
+            overflow: hidden;
+            border-radius: 2px;
+            cursor: pointer;
+            background: #1a1a1a;
+        }
+        .gallery-strip-slot img {
+            /* position:relative (not static) so it paints above .cell-content-layer
+               regardless of DOM order — a non-positioned img always paints below any
+               positioned sibling no matter where it sits in the markup. */
+            position: relative;
+            width: 100%; height: 100%; object-fit: cover; display: block;
+            pointer-events: none; user-select: none;
+        }
+        .gallery-strip-slot.focused {
+            outline: 2px solid var(--accent);
+            outline-offset: -2px;
+            z-index: 3;
+        }
+        .strip-slot-num {
+            position: absolute; top: 4px; left: 4px;
+            font-size: 9px; font-weight: 700; color: rgba(255,255,255,0.9);
+            background: rgba(0,0,0,0.45); padding: 1px 5px; border-radius: 20px;
+            z-index: 4; pointer-events: none;
+        }
+        .strip-slot-controls {
+            position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%);
+            display: flex; gap: 4px; z-index: 4;
+            opacity: 0; transition: opacity 0.15s;
+        }
+        .gallery-strip-slot:hover .strip-slot-controls,
+        .gallery-strip-slot.focused .strip-slot-controls { opacity: 1; }
+        .strip-slot-move-btn {
+            width: 22px; height: 22px; border-radius: 50%; border: none;
+            background: rgba(0,0,0,0.6); color: #fff; cursor: pointer; padding: 0;
+            display: flex; align-items: center; justify-content: center;
+            transition: background 0.12s;
+        }
+        .strip-slot-move-btn:hover { background: var(--accent); }
+        .strip-slot-move-btn .material-symbols-outlined { font-size: 14px; }
+        @media (max-width: 600px) {
+            .strip-slot-controls { opacity: 1; } /* no hover on touch — always visible */
+        }
+        /* Gallery nav arrows */
+        /* Same box-icon treatment as the topbar, now that the canvas is light. */
+        .gallery-arrow {
+            position: absolute; top: 50%; transform: translateY(-50%);
+            z-index: 10; width: 38px; height: 38px; border-radius: 50%;
+            background: var(--bg-shell, #fff); border: 1px solid var(--border);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.12);
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; color: var(--text-secondary);
+            transition: all 0.15s;
+        }
+        .gallery-arrow:hover { background: var(--accent-subtle, #fff7ed); color: var(--accent); border-color: var(--accent); }
+        .gallery-arrow .material-symbols-outlined { font-size: 20px; }
+        #gallery-prev { left: 14px; }
+        #gallery-next { right: 14px; }
+
+        /* Gallery caption — clickable to edit */
+        .gallery-caption {
+            cursor: text;
+        }
+        .gallery-caption:empty { cursor: default; }
+        .gallery-caption:not(:empty):hover { background: rgba(249,115,22,0.08); border-radius: 4px; }
+
+        /* Gallery photo dots */
+        #gallery-dots {
+            position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
+            display: flex; gap: 6px; z-index: 10;
+        }
+        .gdot {
+            width: 6px; height: 6px; border-radius: 50%;
+            background: rgba(0,0,0,0.18); transition: all 0.2s;
+        }
+        .gdot.active { background: var(--accent); width: 18px; border-radius: 3px; }
+
+        /* ── Bottom footer toolbar (edit step) ─────────────────────────── */
+        /* #footer-default / #footer-photo are .app-footer-content panes — sizing,
+           padding and the active/hidden toggle come from that shared class. */
+        #footer-photo { overflow-x: auto; scrollbar-width: none; }
+        #footer-photo::-webkit-scrollbar { display: none; }
+
+        /* Footer icon buttons — plain icon-on-top/label-below nav items, same
+           treatment as index.html's mobile .footer-nav-btn (muted by default,
+           accent on hover/focus, no card/border). Evenly spread across the
+           full width, matching craftools mobile's Título/Texto/Imagem/... row. */
+        .footer-btn, .footer-tool-btn {
+            display: flex; flex-direction: column; align-items: center; gap: 2px;
+            flex: 1 1 0; min-width: 54px;
+            padding: 8px 10px; border-radius: 10px; border: none; background: none;
+            font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 600;
+            color: #7773a6; cursor: pointer; transition: all 0.12s;
+            white-space: nowrap;
+        }
+        .footer-btn:hover, .footer-btn:focus-visible,
+        .footer-tool-btn:hover, .footer-tool-btn:focus-visible { color: var(--accent); }
+        .footer-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+        .footer-btn:disabled:hover { color: #7773a6; }
+        .footer-btn .material-symbols-outlined, .footer-tool-btn .material-symbols-outlined { font-size: 22px; }
+        .footer-tool-btn:active { transform: scale(0.95); }
+
+        /* "Salvar" -- only shown on craftools_api upload-link pages; stands out
+           as the primary action instead of a muted nav item. */
+        .footer-btn-primary, .footer-btn-primary:hover, .footer-btn-primary:focus-visible {
+            color: var(--accent);
+        }
+
+        /* ── Bottom sheet ────────────────────────────────────────────── */
+        #sheet-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+            z-index: 850; opacity: 0; pointer-events: none; transition: opacity 0.25s;
+        }
+        #sheet-overlay.visible { opacity: 1; pointer-events: auto; }
+        #bottom-sheet {
+            position: fixed; left: 0; right: 0; bottom: 0;
+            max-height: 72dvh; background: var(--bg-shell);
+            border-radius: 18px 18px 0 0;
+            box-shadow: 0 -10px 32px rgba(0,0,0,0.18);
+            z-index: 900; flex-direction: column;
+            transform: translateY(100%);
+            transition: transform 0.32s cubic-bezier(0.22,1,0.36,1);
+            display: flex;
+        }
+        #bottom-sheet.open { transform: translateY(0); }
+        .bs-handle { width: 38px; height: 4px; background: var(--border); border-radius: 2px; margin: 10px auto 4px; flex-shrink: 0; }
+        .bs-head {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 4px 16px 10px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+        }
+        .bs-head h3 { margin: 0; font-size: 14px; font-weight: 600; }
+        .bs-close {
+            width: 30px; height: 30px; border-radius: 50%; border: none;
+            background: #f4f4f5; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; color: var(--text-secondary);
+        }
+        .bs-close .material-symbols-outlined { font-size: 18px; }
+        .bs-body { flex: 1; overflow-y: auto; padding: 14px 16px 32px; }
+
+        /* Properties inside sheet */
+        .prop-group { margin-bottom: 14px; }
+        .prop-label { font-size: 10px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.7px; margin-bottom: 5px; }
+        .prop-row { display: flex; align-items: center; gap: 5px; margin-bottom: 5px; }
+        .prop-input {
+            flex: 1; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border);
+            font-family: 'DM Sans', sans-serif; font-size: 13px; background: white; color: var(--text-primary);
+        }
+        .prop-input:focus { outline: none; border-color: var(--accent); }
+        .prop-select { width: 100%; }
+        .prop-btn {
+            padding: 6px 9px; border-radius: 6px; border: 1px solid var(--border); background: white;
+            cursor: pointer; font-size: 12px; color: var(--text-secondary);
+            display: flex; align-items: center; transition: all 0.12s;
+        }
+        .prop-btn:hover { border-color: var(--accent); color: var(--accent); }
+        .prop-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
+        .prop-btn .material-symbols-outlined { font-size: 15px; }
+        .prop-color { width: 34px; height: 32px; border-radius: 6px; border: 1px solid var(--border); cursor: pointer; padding: 0; }
+        .prop-danger {
+            width: 100%; padding: 9px; border-radius: 8px;
+            border: 1px solid #fca5a5; background: transparent; color: #ef4444;
+            font-size: 13px; font-family: 'DM Sans', sans-serif; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; gap: 5px; transition: all 0.12s;
+        }
+        .prop-danger:hover { background: rgba(239,68,68,.08); }
+        .prop-danger .material-symbols-outlined { font-size: 15px; }
+
+        /* Adjust sliders */
+        .adjust-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+        .adjust-label { font-size: 12px; color: var(--text-secondary); width: 80px; flex-shrink: 0; }
+        .adjust-row input[type=range] { flex: 1; accent-color: var(--accent); }
+        .adjust-val { font-size: 11px; font-weight: 600; width: 32px; text-align: right; color: var(--text-primary); }
+        .adjust-reset-btn {
+            display: flex; align-items: center; justify-content: center; gap: 5px;
+            width: 100%; padding: 9px; border-radius: 8px;
+            border: 1px solid var(--border); background: white; color: var(--text-secondary);
+            font-family: 'DM Sans', sans-serif; font-size: 12px; cursor: pointer; transition: all 0.12s;
+        }
+        .adjust-reset-btn:hover { border-color: #d4d4d8; color: var(--text-primary); }
+
+        /* Loading + toast */
+        #loading-overlay {
+            position: fixed; inset: 0; background: rgba(255,255,255,0.88);
+            display: none; align-items: center; justify-content: center;
+            flex-direction: column; gap: 12px; z-index: 1000;
+        }
+        #loading-overlay.visible { display: flex; }
+        #loading-overlay .spin {
+            width: 34px; height: 34px;
+            border: 3px solid var(--border); border-top-color: var(--accent);
+            border-radius: 50%; animation: spin 0.7s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        #loading-overlay p { font-size: 13px; color: var(--text-secondary); margin: 0; }
+
+        #notify {
+            position: fixed; bottom: calc(var(--footer-h) + 16px); left: 50%;
+            transform: translateX(-50%) translateY(40px);
+            background: #18181b; color: white;
+            padding: 9px 16px; border-radius: 8px;
+            font-size: 13px; z-index: 9999; opacity: 0;
+            transition: transform 0.2s ease, opacity 0.2s ease; pointer-events: none;
+        }
+        #notify.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+        /* Mobile tweaks */
+        @media (max-width: 600px) {
+            .view-mode-btn { padding: 6px 10px; font-size: 9px; }
+            .view-mode-btn .material-symbols-outlined { font-size: 18px; }
+            .footer-tool-btn { padding: 8px 12px; font-size: 10px; }
+            .gallery-slide { width: 220px; }
+            #gallery-track { padding: 0 calc(50% - 110px); }
+            .welcome-card { padding: 24px; }
+            .welcome-card h1 { font-size: 24px; }
+            .welcome-features { gap: 14px; flex-wrap: wrap; }
+            .upload-shell { padding: 24px 16px 32px; }
+            .quality-shell { padding: 24px 14px 32px; }
+            .quality-item { flex-wrap: wrap; }
+            .qi-right { flex-direction: row; align-items: center; width: 100%; justify-content: space-between; margin-top: 6px; }
+            .sp-dot span.label { display: none; }
+            .sp-line { width: 18px; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="app">
+
+    <!-- ════ Persistent app topbar (same on every step, mobile and desktop) ════ -->
+    <div id="app-topbar">
+        <span class="app-logo">Photo Layout</span>
+        <div class="topbar-spacer"></div>
+        <button class="box-icon" id="topbar-back-btn" title="Voltar" hidden>
+            <span class="material-symbols-outlined">arrow_back</span>
+        </button>
+        <button class="box-icon" id="topbar-undo-btn" title="Desfazer" disabled hidden>
+            <span class="material-symbols-outlined">undo</span>
+        </button>
+        <button class="box-icon" id="topbar-reload-btn" title="Recarregar layout" hidden>
+            <span class="material-symbols-outlined">refresh</span>
+        </button>
+    </div>
+
+    <!-- ════ STEP 1 — WELCOME ════ -->
+    <div class="step active" id="step-welcome">
+        <div class="welcome-card">
+            <div class="w-icon"><span class="material-symbols-outlined">auto_awesome_mosaic</span></div>
+            <h1 id="welcome-title">Photo Layout Studio</h1>
+            <p id="welcome-sub">Crie um mural de fotos espalhado ou navegue em galeria. Adicione títulos, ajuste as fotos e organize tudo do seu jeito.</p>
+            <div class="welcome-features">
+                <div class="wf-item">
+                    <span class="material-symbols-outlined">upload_file</span>
+                    <span class="wf-label">Upload fácil</span>
+                </div>
+                <div class="wf-item">
+                    <span class="material-symbols-outlined">grid_view</span>
+                    <span class="wf-label">Espalhado ou Galeria</span>
+                </div>
+                <div class="wf-item">
+                    <span class="material-symbols-outlined">edit</span>
+                    <span class="wf-label">Edição livre</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ════ STEP 2 — UPLOAD ════ -->
+    <div class="step" id="step-upload">
+        <div class="step-progress-bar">
+            <div class="sp-dot done"><div class="circle">✓</div><span class="label">Início</span></div>
+            <div class="sp-line done"></div>
+            <div class="sp-dot current"><div class="circle">2</div><span class="label">Upload</span></div>
+            <div class="sp-line"></div>
+            <div class="sp-dot"><div class="circle">3</div><span class="label">Qualidade</span></div>
+            <div class="sp-line"></div>
+            <div class="sp-dot"><div class="circle">4</div><span class="label">Edição</span></div>
+        </div>
+        <div class="upload-shell">
+            <h2>Envie suas fotos</h2>
+            <p class="sub">Escolha o formato do mural e adicione as imagens</p>
+            <div class="picker-row">
+                <div class="picker-field">
+                    <label>Formato</label>
+                    <select id="size-select" class="picker-select"></select>
+                </div>
+            </div>
+            <div id="drop-zone">
+                <span class="material-symbols-outlined dz-icon">cloud_upload</span>
+                <div class="dz-text"><strong>Clique para enviar</strong> ou arraste suas fotos aqui<br>JPG · PNG · WEBP</div>
+            </div>
+            <input type="file" id="file-input" accept="image/*" multiple>
+            <div id="thumb-list"></div>
+            <div id="photos-count">0 fotos carregadas</div>
+        </div>
+    </div>
+
+    <!-- ════ STEP — QUALITY ════ -->
+    <div class="step" id="step-quality">
+        <div class="step-progress-bar">
+            <div class="sp-dot done"><div class="circle">✓</div><span class="label">Início</span></div>
+            <div class="sp-line done"></div>
+            <div class="sp-dot done"><div class="circle">✓</div><span class="label">Upload</span></div>
+            <div class="sp-line done"></div>
+            <div class="sp-dot current"><div class="circle">3</div><span class="label">Qualidade</span></div>
+            <div class="sp-line"></div>
+            <div class="sp-dot"><div class="circle">4</div><span class="label">Edição</span></div>
+        </div>
+        <div class="quality-shell">
+            <h2>Qualidade das fotos</h2>
+            <p class="sub">Verificamos a resolução de cada foto para o tamanho de impressão escolhido</p>
+            <div id="quality-summary-box"></div>
+            <div class="quality-list" id="quality-list"></div>
+            <input type="file" id="replace-file-input" accept="image/*" style="display:none;">
+        </div>
+    </div>
+
+    <!-- ════ STEP — EDIT ════ -->
+    <div class="step" id="step-edit">
+        <!-- Main canvas -->
+        <div id="edit-main">
+            <!-- Hidden board — stores caption craftools-elements -->
+            <div id="photo-board" class="craftools-page"></div>
+
+            <!-- Gallery/carousel view -->
+            <div id="gallery-view">
+                <button class="gallery-arrow" id="gallery-prev">
+                    <span class="material-symbols-outlined">chevron_left</span>
+                </button>
+                <div id="gallery-track"></div>
+                <button class="gallery-arrow" id="gallery-next">
+                    <span class="material-symbols-outlined">chevron_right</span>
+                </button>
+                <div id="gallery-dots"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ════ Persistent app footer (same shell on every step; content pane swapped
+             per step/mode by JS — mirrors index.html's mobile footer-nav) ════ -->
+    <div id="app-footer">
+        <div class="app-footer-content active" id="footer-welcome">
+            <div class="app-footer-cta">
+                <button class="btn-large" id="start-btn">
+                    Começar <span class="material-symbols-outlined">arrow_forward</span>
+                </button>
+            </div>
+        </div>
+        <div class="app-footer-content" id="footer-upload">
+            <div class="app-footer-cta">
+                <button class="btn-large" id="go-to-quality-btn">
+                    Verificar qualidade <span class="material-symbols-outlined">arrow_forward</span>
+                </button>
+            </div>
+        </div>
+        <div class="app-footer-content" id="footer-quality">
+            <div class="app-footer-cta">
+                <button class="btn-large" id="go-to-edit-btn">
+                    Continuar para edição <span class="material-symbols-outlined">arrow_forward</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Edit step, default state: actions — same uniform icon+label nav row
+             as craftools mobile's footer (Título/Texto/Imagem/...), evenly spread. -->
+        <div class="app-footer-content" id="footer-default">
+            <button class="footer-btn" id="footer-undo-btn" disabled>
+                <span class="material-symbols-outlined">undo</span>
+                Desfazer
+            </button>
+            <button class="footer-btn" id="footer-shuffle-btn">
+                <span class="material-symbols-outlined">shuffle</span>
+                Reembaralhar
+            </button>
+            <!-- Only shown when this page is served through a craftools_api upload
+                 link (window.UPLOAD_LINK present) -- see the UPLOAD_LINK block below. -->
+            <button class="footer-btn footer-btn-primary" id="footer-save-btn" hidden>
+                <span class="material-symbols-outlined">cloud_upload</span>
+                Salvar
+            </button>
+        </div>
+
+        <!-- Edit step, photo focused state: tool buttons. Mirrors MobileToolbar.js's
+             showElementMode() pattern — a plain "Fechar" item first, then one
+             uniform nav item per tool, no dividers/labels in between. -->
+        <div class="app-footer-content" id="footer-photo">
+            <button class="footer-btn" id="footer-deselect-btn">
+                <span class="material-symbols-outlined">arrow_back</span>
+                Fechar
+            </button>
+            <button class="footer-tool-btn" id="footer-titulo-btn">
+                <span class="material-symbols-outlined">title</span>
+                Título
+            </button>
+            <button class="footer-tool-btn" id="footer-ajuste-btn">
+                <span class="material-symbols-outlined">tune</span>
+                Ajuste
+            </button>
+            <button class="footer-tool-btn" id="footer-bg-btn">
+                <span class="material-symbols-outlined">palette</span>
+                Fundo
+            </button>
+            <button class="footer-tool-btn" id="footer-replace-btn">
+                <span class="material-symbols-outlined">sync_alt</span>
+                Substituir
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Bottom sheet (properties/titulo/ajuste) -->
+<div id="sheet-overlay"></div>
+<div id="bottom-sheet">
+    <div class="bs-handle"></div>
+    <div class="bs-head">
+        <h3 id="bs-title">Propriedades</h3>
+        <button class="bs-close" id="bs-close-btn">
+            <span class="material-symbols-outlined">close</span>
+        </button>
+    </div>
+    <div class="bs-body" id="bs-body"></div>
+</div>
+
+<div id="loading-overlay"><div class="spin"></div><p>Montando o layout…</p></div>
+<div id="notify"></div>
+
+<script>
+    // Mesma configuração usada em index.html — necessária para o ApiPicker
+    // (aba "Da API" do painel de Fundo) conseguir buscar as coleções de imagens.
+    window.CRAFTOOLS_CONFIG = window.CRAFTOOLS_CONFIG || {
+        apiBase: 'http://127.0.0.1/craftools_api',
+    };
+</script>
+<!-- public/upload.php replaces the single-line marker below with a
+     <script>window.UPLOAD_LINK = {token, clientName, photoCount, gridSize,
+     saveUrl}</script> block when this page is opened through a client
+     upload link. Left as-is (UPLOAD_LINK stays undefined) when this file
+     is opened directly, e.g. for local testing. -->
+<!--UPLOAD_LINK_DATA_MARKER-->
+<script type="module">
+import { Craftools_Element } from '/craftools/craftools/components/Element.js';
+import { HistoryManager }    from '/craftools/craftools/utils/HistoryManager.js';
+import { TextTool }          from '/craftools/craftools/tools/text/TextTool.js';
+import { CellBackground }    from '/craftools/craftools/tools/album/CellBackground.js';
+import { CellPanel }         from '/craftools/craftools/tools/album/CellPanel.js';
+// Registra as traduções "pageTool.*" (Fundo/Cor/Gradiente) usadas pelo CellPanel —
+// normalmente carregadas de graça quando PageTool.js é importado, mas essa página
+// não usa PageTool, então precisamos importar o arquivo de traduções na mão.
+import '/craftools/craftools/tools/page/PageTool_Translations.js';
+
+Craftools_Element.init();
+
+// ── GridSizes ─────────────────────────────────────────────────────────────────
+const GridSizesDefault = (await import('/craftools/craftools/utils/GridSizes.js')).GridSizes;
+function getGridSizesFromURL() {
+    try {
+        const b64 = new URLSearchParams(location.search).get('gridsizes');
+        return b64 ? JSON.parse(atob(b64)) : null;
+    } catch { return null; }
+}
+// When opened through a craftools_api upload link, the admin already chose the
+// kit (grid size) for this client — restrict the picker to that single option
+// instead of the full catalog. Falls back to the normal behavior (URL param or
+// full default catalog) when UPLOAD_LINK isn't present, e.g. when this file is
+// opened directly for testing.
+const gridSizes = (window.UPLOAD_LINK && window.UPLOAD_LINK.gridSize)
+    ? [window.UPLOAD_LINK.gridSize]
+    : (getGridSizesFromURL() || GridSizesDefault);
+
+// ── State ─────────────────────────────────────────────────────────────────────
+const photos = [];          // {url, name, width, height}
+let focusedIndex   = -1;        // photo index of focused item
+let galleryIndex   = 0;         // current center slide in gallery
+let lastTemplate   = null;
+let adjustState    = {};        // photoIndex → {brightness, contrast, saturation}
+let photoTransforms   = {};     // photoIndex → {posX, posY, zoom, rotation}
+let photoAjusteActive = {};     // photoIndex → bool  (pan/zoom gestures enabled)
+let captionEditingEl  = null;   // craftools-element currently open in caption sheet
+let photoBackground   = {};     // photoIndex → { bg:{type,value,position,size}, overlay:{...}, border:{...} } — see CellBackground.js
+
+// ── DOM refs ──────────────────────────────────────────────────────────────────
+const steps = {
+    welcome: document.getElementById('step-welcome'),
+    upload:  document.getElementById('step-upload'),
+    quality: document.getElementById('step-quality'),
+    edit:    document.getElementById('step-edit'),
+};
+const loadingOv      = document.getElementById('loading-overlay');
+const notifyEl       = document.getElementById('notify');
+
+const startBtn               = document.getElementById('start-btn');
+const goToQualityBtn         = document.getElementById('go-to-quality-btn');
+const goToEditBtn            = document.getElementById('go-to-edit-btn');
+
+// Persistent app topbar (same across every step)
+const topbarBackBtn   = document.getElementById('topbar-back-btn');
+const topbarUndoBtn   = document.getElementById('topbar-undo-btn');
+const topbarReloadBtn = document.getElementById('topbar-reload-btn');
+
+const fileInput      = document.getElementById('file-input');
+const dropZone       = document.getElementById('drop-zone');
+const thumbList      = document.getElementById('thumb-list');
+const photosCount    = document.getElementById('photos-count');
+const sizeSelect     = document.getElementById('size-select');
+const qualityList       = document.getElementById('quality-list');
+const qualitySummaryBox = document.getElementById('quality-summary-box');
+const replaceFileInput  = document.getElementById('replace-file-input');
+
+const board          = document.getElementById('photo-board');
+const galleryView    = document.getElementById('gallery-view');
+const galleryTrack   = document.getElementById('gallery-track');
+const galleryDots    = document.getElementById('gallery-dots');
+const galleryPrev    = document.getElementById('gallery-prev');
+const galleryNext    = document.getElementById('gallery-next');
+
+// Shared app-footer panes — one active at a time (welcome/upload/quality tied to
+// the current step; default/photo are the two sub-states of the edit step's tools).
+const footerPanes = {
+    welcome: document.getElementById('footer-welcome'),
+    upload:  document.getElementById('footer-upload'),
+    quality: document.getElementById('footer-quality'),
+    default: document.getElementById('footer-default'),
+    photo:   document.getElementById('footer-photo'),
+};
+const footerDefault      = footerPanes.default;
+const footerPhoto        = footerPanes.photo;
+const footerDeselectBtn  = document.getElementById('footer-deselect-btn');
+const footerTituloBtn    = document.getElementById('footer-titulo-btn');
+const footerAjusteBtn    = document.getElementById('footer-ajuste-btn');
+const footerBgBtn        = document.getElementById('footer-bg-btn');
+const footerReplaceBtn   = document.getElementById('footer-replace-btn');
+const footerUndoBtn      = document.getElementById('footer-undo-btn');
+const footerShuffleBtn   = document.getElementById('footer-shuffle-btn');
+
+const sheetOverlay   = document.getElementById('sheet-overlay');
+const bottomSheet    = document.getElementById('bottom-sheet');
+const bsTitle        = document.getElementById('bs-title');
+const bsBody         = document.getElementById('bs-body');
+const bsCloseBtn     = document.getElementById('bs-close-btn');
+
+// ── Step navigation ───────────────────────────────────────────────────────────
+// Where the topbar's back button should send you from each step.
+const STEP_BACK_TARGET = { upload: 'welcome', quality: 'upload', edit: 'upload' };
+let currentStep = 'welcome';
+
+function setFooterPane(name) {
+    Object.values(footerPanes).forEach(p => p.classList.remove('active'));
+    footerPanes[name].classList.add('active');
+}
+
+function goToStep(name) {
+    currentStep = name;
+    Object.values(steps).forEach(s => s.classList.remove('active'));
+    steps[name].classList.add('active');
+    setFooterPane(name === 'edit' ? 'default' : name);
+
+    // Topbar: back button hidden on the first screen; undo/reload only make
+    // sense once there's an actual layout being edited.
+    topbarBackBtn.hidden = !(name in STEP_BACK_TARGET);
+    topbarUndoBtn.hidden = topbarReloadBtn.hidden = (name !== 'edit');
+}
+topbarBackBtn.addEventListener('click', () => {
+    const target = STEP_BACK_TARGET[currentStep];
+    if (target) goToStep(target);
+});
+topbarReloadBtn.addEventListener('click', () => generateLayout());
+topbarUndoBtn.addEventListener('click', () => {
+    try { HistoryManager.undo(board); } catch {}
+    updateUndoBtn();
+});
+
+startBtn.addEventListener('click', () => goToStep('upload'));
+
+goToQualityBtn.addEventListener('click', () => {
+    if (!photos.length) { notify('Envie pelo menos uma foto primeiro'); return; }
+    goToStep('quality');
+    renderQualityCheck();
+});
+goToEditBtn.addEventListener('click', async () => {
+    if (!photos.length) { notify('Envie pelo menos uma foto primeiro'); return; }
+    goToStep('edit');
+    await generateLayout();
+});
+
+// ── Format selector ───────────────────────────────────────────────────────────
+gridSizes.forEach((g, i) => {
+    const o = document.createElement('option');
+    o.value = i; o.textContent = g.name;
+    sizeSelect.appendChild(o);
+});
+function syncURLParam() {
+    const t = gridSizes[+sizeSelect.value];
+    if (!t) return;
+    const url = new URL(location.href);
+    url.searchParams.set('gridsizes', btoa(JSON.stringify([t])));
+    history.replaceState(null, '', url.toString());
+}
+sizeSelect.addEventListener('change', syncURLParam);
+syncURLParam();
+
+// ── Upload link personalization ────────────────────────────────────────────────
+// When this page is served through craftools_api's public/upload.php, the admin
+// already picked the kit and photo count for this client — reuses the existing
+// welcome-step/upload-step markup, just adjusting text and hiding the now-moot
+// format picker instead of building a separate UI for this flow.
+if (window.UPLOAD_LINK) {
+    const UL = window.UPLOAD_LINK;
+    const welcomeTitle = document.getElementById('welcome-title');
+    const welcomeSub   = document.getElementById('welcome-sub');
+    if (welcomeTitle) welcomeTitle.textContent = `Olá ${UL.clientName}, faça por aqui o upload das suas fotos`;
+    if (welcomeSub) {
+        welcomeSub.textContent = UL.photoCount > 0
+            ? `Envie ${UL.photoCount} foto${UL.photoCount > 1 ? 's' : ''} para o seu kit "${UL.gridSize?.name || ''}". Você pode ajustar títulos, cores de fundo e a posição de cada foto antes de salvar.`
+            : `Envie suas fotos para o kit "${UL.gridSize?.name || ''}". Você pode ajustar títulos, cores de fundo e a posição de cada foto antes de salvar.`;
+    }
+    // Only one kit to choose from in this flow — the picker would just show a
+    // single, already-selected option, so hide it instead of leaving dead UI.
+    const pickerRow = document.querySelector('.picker-row');
+    if (pickerRow && gridSizes.length <= 1) pickerRow.style.display = 'none';
+
+    const uploadSub = document.querySelector('#step-upload .sub');
+    if (uploadSub && UL.photoCount > 0) {
+        uploadSub.textContent = `Adicione ${UL.photoCount} foto${UL.photoCount > 1 ? 's' : ''} (formato "${UL.gridSize?.name || ''}" já selecionado)`;
+    }
+}
+
+// ── Upload ────────────────────────────────────────────────────────────────────
+function loadFiles(files) {
+    const valid = Array.from(files).filter(f => f.type.startsWith('image/'));
+    if (!valid.length) return;
+    let done = 0;
+    valid.forEach(file => {
+        const reader = new FileReader();
+        reader.onload = e => {
+            const url = e.target.result;
+            const photo = { url, name: file.name, width: 0, height: 0 };
+            photos.push(photo);
+            const idx = photos.length - 1;
+            addThumb(url, idx);
+            const probe = new Image();
+            probe.onload = () => { photo.width = probe.naturalWidth; photo.height = probe.naturalHeight; };
+            probe.src = url;
+            if (++done === valid.length) {
+                updateCounts();
+                notify(`${valid.length} foto${valid.length > 1 ? 's' : ''} adicionada${valid.length > 1 ? 's' : ''}`);
+            }
+        };
+        reader.readAsDataURL(file);
+    });
+}
+function updateCounts() {
+    const n = photos.length;
+    photosCount.textContent = `${n} foto${n !== 1 ? 's' : ''} carregada${n !== 1 ? 's' : ''}`;
+}
+function addThumb(url, index) {
+    const item = document.createElement('div');
+    item.className = 'thumb-item';
+    const img = document.createElement('img'); img.src = url;
+    const btn = document.createElement('button'); btn.className = 'thumb-remove'; btn.innerHTML = '✕';
+    btn.addEventListener('click', e => { e.stopPropagation(); removePhoto(index); });
+    item.appendChild(img); item.appendChild(btn);
+    thumbList.appendChild(item);
+}
+function removePhoto(index) {
+    photos.splice(index, 1);
+    thumbList.innerHTML = '';
+    photos.forEach((p, i) => addThumb(p.url, i));
+    updateCounts();
+}
+fileInput.addEventListener('change', e => loadFiles(e.target.files));
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag-over'); loadFiles(e.dataTransfer.files); });
+
+// ── DPI Quality Check ─────────────────────────────────────────────────────────
+const MM_PER_INCH = 25.4, DPI_GOOD = 200, DPI_MID = 120;
+function calcDPI(photo, wMm, hMm) {
+    if (!photo.width || !photo.height) return null;
+    return Math.min(photo.width / (wMm / MM_PER_INCH), photo.height / (hMm / MM_PER_INCH));
+}
+function dpiLevel(dpi) {
+    if (dpi === null) return 'unknown';
+    return dpi >= DPI_GOOD ? 'good' : dpi >= DPI_MID ? 'mid' : 'low';
+}
+async function renderQualityCheck() {
+    const tmpl = gridSizes[+sizeSelect.value];
+    const cellW = tmpl?.cellWidth || 100, cellH = tmpl?.cellHeight || 100;
+    await Promise.all(photos.map(p => new Promise(res => {
+        if (p.width && p.height) return res();
+        const img = new Image();
+        img.onload = () => { p.width = img.naturalWidth; p.height = img.naturalHeight; res(); };
+        img.onerror = () => res(); img.src = p.url;
+    })));
+    qualityList.innerHTML = '';
+    let low = 0, mid = 0;
+    const entries = photos.map((photo, i) => { const dpi = calcDPI(photo, cellW, cellH); return { photo, i, dpi, level: dpiLevel(dpi) }; });
+    entries.sort((a,b) => ({low:0,mid:1,unknown:1,good:2}[a.level] - {low:0,mid:1,unknown:1,good:2}[b.level]));
+    entries.forEach(({ photo, i, dpi, level }) => {
+        if (level === 'low') low++;
+        else if (level === 'mid') mid++;
+        const item = document.createElement('div');
+        item.className = `quality-item${level === 'low' ? ' low-dpi' : level === 'mid' ? ' mid-dpi' : ''}`;
+        item.innerHTML = `
+            <div class="qi-thumb"><img src="${photo.url}"></div>
+            <div class="qi-info">
+                <div class="qi-name">${photo.name}</div>
+                <div class="qi-meta">${photo.width}×${photo.height}px → célula ${cellW}×${cellH}mm</div>
+                ${level === 'low' ? '<div class="qi-warning"><span class="material-symbols-outlined">report</span>Resolução baixa</div>' : ''}
+                ${level === 'mid' ? '<div class="qi-warning mid"><span class="material-symbols-outlined">info</span>Resolução mediana</div>' : ''}
+            </div>
+            <div class="qi-right">
+                <div class="qi-badge ${level === 'good' ? 'good' : level === 'mid' ? 'mid' : 'low'}">
+                    <span class="material-symbols-outlined">${level === 'good' ? 'check_circle' : level === 'mid' ? 'warning' : 'error'}</span>
+                    ${dpi !== null ? Math.round(dpi) + ' DPI' : '—'}
+                </div>
+                ${level !== 'good' ? `<button class="qi-replace-btn" data-idx="${i}"><span class="material-symbols-outlined">sync_alt</span>Substituir</button>` : ''}
+            </div>`;
+        qualityList.appendChild(item);
+    });
+    qualityList.querySelectorAll('.qi-replace-btn').forEach(btn =>
+        btn.addEventListener('click', () => triggerPhotoReplace(+btn.dataset.idx)));
+    qualitySummaryBox.innerHTML = low > 0
+        ? `<div class="quality-summary warn"><span class="material-symbols-outlined">report</span><span>${low} foto${low>1?'s estão':' está'} com resolução baixa.</span></div>`
+        : mid > 0
+        ? `<div class="quality-summary warn"><span class="material-symbols-outlined">info</span><span>${mid} foto${mid>1?'s têm':' tem'} resolução mediana.</span></div>`
+        : `<div class="quality-summary ok"><span class="material-symbols-outlined">check_circle</span><span>Todas as fotos estão com boa resolução.</span></div>`;
+}
+let _replaceIdx = null;
+function triggerPhotoReplace(idx) { _replaceIdx = idx; replaceFileInput.click(); }
+replaceFileInput.addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (_replaceIdx === null || !file || !file.type.startsWith('image/')) return;
+    const idx = _replaceIdx;
+    const reader = new FileReader();
+    reader.onload = ev => {
+        photos[idx].url = ev.target.result; photos[idx].name = file.name;
+        photos[idx].width = 0; photos[idx].height = 0;
+
+        // If we're mid-edit (gallery already built), swap the live <img> in place
+        // right away instead of waiting for a full rebuild — keeps position/zoom/
+        // background/caption for that slot untouched.
+        const container = galleryTrack.querySelector(`[data-photo-idx="${idx}"]`);
+        if (container) {
+            const liveImg = container.querySelector('img');
+            if (liveImg) { liveImg.src = photos[idx].url; applyPhotoStyle(liveImg, idx); }
+        }
+
+        const probe = new Image();
+        probe.onload = () => { photos[idx].width = probe.naturalWidth; photos[idx].height = probe.naturalHeight; renderQualityCheck(); };
+        probe.src = ev.target.result;
+        thumbList.innerHTML = ''; photos.forEach((p,i) => addThumb(p.url,i));
+        notify('Foto substituída'); _replaceIdx = null;
+    };
+    reader.readAsDataURL(file);
+    replaceFileInput.value = '';
+});
+
+// ── Build gallery layout ──────────────────────────────────────────────────────
+async function generateLayout() {
+    if (!photos.length) { notify('Envie pelo menos uma foto primeiro'); return; }
+    const template = gridSizes[+sizeSelect.value];
+    if (!template) return;
+    lastTemplate = template;
+
+    loadingOv.classList.add('visible');
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+    // Clear only grid cells; keep caption craftools-elements
+    board.querySelectorAll('.craftools-grid-cell').forEach(el => el.remove());
+    focusedIndex = -1;
+    setFooterMode('default');
+    HistoryManager.clear();
+
+    window.craftoolsAutoSnap = true;
+    window.craftoolsAutoSnapAlign = 'bottom-center';
+
+    buildGallery();
+
+    await new Promise(r => setTimeout(r, 50));
+    try { HistoryManager.snapshot(board); } catch {}
+    updateUndoBtn();
+    loadingOv.classList.remove('visible');
+    notify(`${photos.length} foto${photos.length > 1 ? 's' : ''} carregada${photos.length > 1 ? 's' : ''}`);
+}
+
+// ── Resize ────────────────────────────────────────────────────────────────────
+let resizeTimer;
+window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+        if (steps.edit.classList.contains('active') && photos.length) generateLayout();
+    }, 350);
+});
+
+// ── Gallery ───────────────────────────────────────────────────────────────────
+// A template counts as a "photostrip" (tirinha) when it declares cellLines and/or
+// cellColumns — meaning each physical cell on the page actually holds several photos
+// arranged in a mini sub-grid (see craftools/utils/LayoutGrid.js `isPhotostrip`).
+function isStripTemplate(tmpl) {
+    return !!(tmpl && ((tmpl.cellLines && tmpl.cellLines > 1) || (tmpl.cellColumns && tmpl.cellColumns > 1)));
+}
+
+function buildGallery() {
+    galleryTrack.innerHTML = '';
+    galleryDots.innerHTML  = '';
+
+    if (!lastTemplate || !photos.length) return;
+
+    // Compute slide size from template aspect ratio, fitting inside the gallery view.
+    // For photostrips, cellWidth/cellHeight describe the WHOLE strip (e.g. a 5x15cm
+    // tirinha), not a single photo.
+    const cellW = lastTemplate.cellWidth  || 60;
+    const cellH = lastTemplate.cellHeight || 85;
+    const padParts = (lastTemplate.cellPadding || '0 0 0 0').split(' ').map(Number);
+    const [padT, padR, padB, padL] = padParts;
+
+    const stripLines = lastTemplate.cellLines   || 1;
+    const stripCols  = lastTemplate.cellColumns || 1;
+    const isStrip    = isStripTemplate(lastTemplate);
+    const itemsPerStripe = stripLines * stripCols;
+    const cellSpacing    = lastTemplate.cellSpacing || 0;
+
+    const galleryRect = galleryView.getBoundingClientRect();
+    const maxH = galleryRect.height * 0.80;
+    const maxW = galleryRect.width  * 0.52;
+    const aspect = cellW / cellH;
+    let slideH = maxH;
+    let slideW = slideH * aspect;
+    if (slideW > maxW) { slideW = maxW; slideH = slideW / aspect; }
+
+    // Padding as fraction of slide px dimensions
+    const pxPerUnitW = slideW / cellW;
+    const pxPerUnitH = slideH / cellH;
+    const insetT = padT * pxPerUnitH;
+    const insetR = padR * pxPerUnitW;
+    const insetB = padB * pxPerUnitH;
+    const insetL = padL * pxPerUnitW;
+    const spacingPx = cellSpacing * Math.min(pxPerUnitW, pxPerUnitH);
+
+    // Center-offset padding for the track so first/last slides can be centered
+    const sidePad = (galleryRect.width - slideW) / 2;
+    galleryTrack.style.paddingLeft  = `${sidePad}px`;
+    galleryTrack.style.paddingRight = `${sidePad}px`;
+
+    // Group photos into slides: 1 photo per slide normally, or `itemsPerStripe`
+    // photos per slide (one physical strip) when the template is a photostrip.
+    const groups = [];
+    if (isStrip) {
+        for (let i = 0; i < photos.length; i += itemsPerStripe) {
+            const g = [];
+            for (let k = i; k < Math.min(i + itemsPerStripe, photos.length); k++) g.push(k);
+            groups.push(g);
+        }
+    } else {
+        photos.forEach((_, i) => groups.push([i]));
+    }
+
+    groups.forEach((groupIndices, groupIdx) => {
+        const slide = document.createElement('div');
+        slide.className = 'gallery-slide';
+        slide.dataset.groupIdx = groupIdx;
+        slide.style.width  = `${slideW}px`;
+        slide.style.height = `${slideH}px`;
+
+        if (isStrip) {
+            // Inner N×M grid of individual photo slots, mirroring LayoutGrid.js's
+            // _buildInnerStripGrid (grid-template based on cellLines/cellColumns,
+            // gapped by cellSpacing, inset by cellPadding).
+            const innerGrid = document.createElement('div');
+            innerGrid.className = 'gallery-strip-grid';
+            innerGrid.style.cssText = `
+                top:${insetT}px; right:${insetR}px; bottom:${insetB}px; left:${insetL}px;
+                grid-template-columns: repeat(${stripCols}, 1fr);
+                grid-template-rows: repeat(${stripLines}, 1fr);
+                gap: ${spacingPx}px;
+            `;
+            groupIndices.forEach((photoIdx, slotPos) => {
+                innerGrid.appendChild(buildStripSlot(photoIdx, groupIndices, slotPos, groupIdx, slide));
+            });
+            slide.appendChild(innerGrid);
+
+            slide.addEventListener('click', e => {
+                if (e.target.closest('.gallery-strip-slot')) return; // handled by the slot itself
+                if (groupIdx !== galleryIndex) scrollGalleryTo(groupIdx);
+                else defocusPhoto();
+            });
+        } else {
+            const idx = groupIndices[0];
+
+            // Background layer — sits behind everything, filling the whole slide
+            // (visible in the polaroid-style padding/mat area around the photo).
+            // Color/gradient/image set via the "Fundo" tool (CellBackground.js).
+            const contentLayer = document.createElement('div');
+            contentLayer.className = 'cell-content-layer';
+            slide.appendChild(contentLayer);
+
+            // Image area — respects template padding (shows polaroid white border)
+            const imgArea = document.createElement('div');
+            imgArea.className = 'gallery-img-area';
+            imgArea.dataset.photoIdx = idx;
+            imgArea.style.cssText = `top:${insetT}px;right:${insetR}px;bottom:${insetB}px;left:${insetL}px;`;
+
+            const img = document.createElement('img');
+            img.src = photos[idx].url;
+            img.draggable = false;
+            applyAdjust(img, idx);
+
+            imgArea.appendChild(img);
+            attachPhotoPanZoom(imgArea, idx);
+            slide.appendChild(imgArea);
+
+            // Overlay layer — sits on top of the photo itself (e.g. a texture/frame
+            // image picked via the "Fundo" tool's API tab).
+            const overlayLayer = document.createElement('div');
+            overlayLayer.className = 'cell-overlay-layer';
+            overlayLayer.style.cssText = `top:${insetT}px;right:${insetR}px;bottom:${insetB}px;left:${insetL}px;`;
+            slide.appendChild(overlayLayer);
+
+            restorePhotoBackgroundState(idx, slide);
+
+            // Caption zone — shows title text; click to edit
+            const caption = document.createElement('div');
+            caption.className = 'gallery-caption';
+            caption.dataset.captionFor = idx;
+            caption.style.height = `${insetB}px`;
+            caption.addEventListener('click', e => {
+                e.stopPropagation();
+                // Ensure this photo is focused and footer is in photo mode
+                if (focusedIndex !== idx) {
+                    galleryIndex = groupIdx;
+                    updateGalleryActive(groupIdx);
+                    focusPhoto(slide, idx);
+                }
+                openCaptionEditor(idx);
+            });
+            slide.appendChild(caption);
+
+            slide.addEventListener('click', () => {
+                if (groupIdx === galleryIndex) {
+                    if (focusedIndex === idx) defocusPhoto();
+                    else focusPhoto(slide, idx);
+                } else {
+                    scrollGalleryTo(groupIdx);
+                }
+            });
+        }
+
+        // Badge — shows "Tira X/Y" for strips, "N/total" for single photos
+        const num = document.createElement('div');
+        num.className = 'gallery-slide-num';
+        num.textContent = isStrip ? `Tira ${groupIdx + 1}/${groups.length}` : `${groupIdx + 1}/${groups.length}`;
+        slide.appendChild(num);
+
+        galleryTrack.appendChild(slide);
+
+        // Dot
+        const dot = document.createElement('div');
+        dot.className = 'gdot';
+        galleryDots.appendChild(dot);
+    });
+
+    updateGalleryActive(0);
+    syncGalleryCaptions();
+    updateStripFocusHighlight();
+
+    // Detect active slide on scroll
+    let scrollTimer;
+    galleryTrack.addEventListener('scroll', () => {
+        clearTimeout(scrollTimer);
+        scrollTimer = setTimeout(() => {
+            const slides = galleryTrack.querySelectorAll('.gallery-slide');
+            const trackRect = galleryTrack.getBoundingClientRect();
+            const trackCenter = trackRect.left + trackRect.width / 2;
+            let closest = 0, minDist = Infinity;
+            slides.forEach((s, i) => {
+                const r = s.getBoundingClientRect();
+                const dist = Math.abs((r.left + r.width / 2) - trackCenter);
+                if (dist < minDist) { minDist = dist; closest = i; }
+            });
+            updateGalleryActive(closest);
+        }, 80);
+    }, { passive: true });
+}
+
+// ── Build one photo slot inside a photostrip slide ─────────────────────────────
+// `groupIndices` is the ordered list of photo indexes rendered in this stripe;
+// `slotPos` is this slot's position within that list — used to find its left/right
+// neighbours for the reposition (swap) controls.
+function buildStripSlot(photoIdx, groupIndices, slotPos, groupIdx, slideEl) {
+    const slot = document.createElement('div');
+    slot.className = 'gallery-strip-slot';
+    slot.dataset.photoIdx = photoIdx;
+
+    // Background layer — each slot is its own independent "cell" for backgrounds
+    // (there's no shared mat/border area to speak of inside a strip).
+    const contentLayer = document.createElement('div');
+    contentLayer.className = 'cell-content-layer';
+    slot.appendChild(contentLayer);
+
+    const img = document.createElement('img');
+    img.src = photos[photoIdx].url;
+    img.draggable = false;
+    applyAdjust(img, photoIdx);
+    slot.appendChild(img);
+    attachPhotoPanZoom(slot, photoIdx);
+
+    // Overlay layer — on top of the photo (texture/frame image from the API tab).
+    const overlayLayer = document.createElement('div');
+    overlayLayer.className = 'cell-overlay-layer';
+    overlayLayer.style.cssText = 'top:0;right:0;bottom:0;left:0;';
+    slot.appendChild(overlayLayer);
+
+    restorePhotoBackgroundState(photoIdx, slot);
+
+    const num = document.createElement('div');
+    num.className = 'strip-slot-num';
+    num.textContent = `${photoIdx + 1}`;
+    slot.appendChild(num);
+
+    // Reposition controls — swap this photo with its left/right neighbour
+    // *within the same strip*.
+    const prevPhotoIdx = slotPos > 0 ? groupIndices[slotPos - 1] : null;
+    const nextPhotoIdx = slotPos < groupIndices.length - 1 ? groupIndices[slotPos + 1] : null;
+    if (prevPhotoIdx !== null || nextPhotoIdx !== null) {
+        const controls = document.createElement('div');
+        controls.className = 'strip-slot-controls';
+        if (prevPhotoIdx !== null) {
+            const btnPrev = document.createElement('button');
+            btnPrev.type = 'button';
+            btnPrev.className = 'strip-slot-move-btn';
+            btnPrev.title = 'Mover para trás';
+            btnPrev.innerHTML = '<span class="material-symbols-outlined">chevron_left</span>';
+            btnPrev.addEventListener('click', e => { e.stopPropagation(); moveSlotPhoto(photoIdx, prevPhotoIdx, groupIdx); });
+            controls.appendChild(btnPrev);
+        }
+        if (nextPhotoIdx !== null) {
+            const btnNext = document.createElement('button');
+            btnNext.type = 'button';
+            btnNext.className = 'strip-slot-move-btn';
+            btnNext.title = 'Mover para frente';
+            btnNext.innerHTML = '<span class="material-symbols-outlined">chevron_right</span>';
+            btnNext.addEventListener('click', e => { e.stopPropagation(); moveSlotPhoto(photoIdx, nextPhotoIdx, groupIdx); });
+            controls.appendChild(btnNext);
+        }
+        slot.appendChild(controls);
+    }
+
+    slot.addEventListener('click', e => {
+        e.stopPropagation();
+        if (groupIdx !== galleryIndex) scrollGalleryTo(groupIdx);
+        if (focusedIndex === photoIdx) defocusPhoto();
+        else focusPhoto(slideEl, photoIdx);
+    });
+
+    return slot;
+}
+
+// ── Swap two photos (and everything indexed by photo position: adjustments,
+// transforms, and any caption bound to them) so a photo can change position
+// within its strip. ──────────────────────────────────────────────────────────
+function swapPhotos(i, j) {
+    if (i === j || i < 0 || j < 0 || i >= photos.length || j >= photos.length) return;
+
+    [photos[i], photos[j]] = [photos[j], photos[i]];
+
+    const tmpAdj = adjustState[i]; adjustState[i] = adjustState[j]; adjustState[j] = tmpAdj;
+    const tmpT   = photoTransforms[i]; photoTransforms[i] = photoTransforms[j]; photoTransforms[j] = tmpT;
+    const tmpA   = photoAjusteActive[i]; photoAjusteActive[i] = photoAjusteActive[j]; photoAjusteActive[j] = tmpA;
+    const tmpBg  = photoBackground[i]; photoBackground[i] = photoBackground[j]; photoBackground[j] = tmpBg;
+
+    const elI = board.querySelector(`craftools-element[data-caption-for="${i}"]`);
+    const elJ = board.querySelector(`craftools-element[data-caption-for="${j}"]`);
+    if (elI) elI.setAttribute('data-caption-for', String(j));
+    if (elJ) elJ.setAttribute('data-caption-for', String(i));
+
+    if (focusedIndex === i) focusedIndex = j;
+    else if (focusedIndex === j) focusedIndex = i;
+}
+
+function moveSlotPhoto(photoIdx, neighborPhotoIdx, groupIdx) {
+    if (neighborPhotoIdx === null || neighborPhotoIdx === undefined) return;
+    swapPhotos(photoIdx, neighborPhotoIdx);
+    try { HistoryManager.snapshot(board); } catch {}
+    updateUndoBtn();
+
+    const wasFocused = focusedIndex;
+    buildGallery();
+    scrollGalleryTo(groupIdx);
+    if (wasFocused >= 0) {
+        const slideEl = galleryTrack.querySelector(`.gallery-slide[data-group-idx="${groupIdx}"]`);
+        focusPhoto(slideEl, wasFocused);
+    }
+    notify('Posição da foto alterada');
+}
+
+// Highlight whichever photo slot corresponds to the currently focused photo
+// (only meaningful inside photostrip slides, which hold several photos each).
+function updateStripFocusHighlight() {
+    galleryTrack.querySelectorAll('.gallery-strip-slot').forEach(s => {
+        s.classList.toggle('focused', +s.dataset.photoIdx === focusedIndex);
+    });
+}
+
+// Sync caption text AND style from board's craftools-element titles to gallery slides.
+// (Previously this only copied textContent, so font/size/color/align edits made in the
+// "Legenda" panel never showed up on the visible caption — fixed by mirroring style too.)
+function syncGalleryCaptions() {
+    // Reset all captions
+    galleryTrack.querySelectorAll('.gallery-caption').forEach(c => {
+        c.textContent = '';
+        c.style.fontFamily = '';
+        c.style.fontSize   = '';
+        c.style.fontWeight = '';
+        c.style.fontStyle  = '';
+        c.style.color      = '';
+        c.style.textAlign  = '';
+    });
+
+    // For each title element on the board that has a data-caption-for attribute, copy its
+    // text content and its visual style onto the matching visible caption element.
+    board.querySelectorAll('craftools-element[data-caption-for]').forEach(el => {
+        const photoIdx = el.getAttribute('data-caption-for');
+        const textEl   = el.contentArea?.querySelector('[contenteditable]');
+        if (!textEl) return;
+        const text = textEl.textContent?.trim() || '';
+        const cap  = galleryTrack.querySelector(`.gallery-caption[data-caption-for="${photoIdx}"]`);
+        if (!cap) return;
+        cap.textContent = text;
+        if (textEl.style.fontFamily) cap.style.fontFamily = textEl.style.fontFamily;
+        if (textEl.style.fontSize)   cap.style.fontSize   = textEl.style.fontSize;
+        if (textEl.style.fontWeight) cap.style.fontWeight = textEl.style.fontWeight;
+        if (textEl.style.fontStyle)  cap.style.fontStyle  = textEl.style.fontStyle;
+        if (textEl.style.color)      cap.style.color      = textEl.style.color;
+        if (textEl.style.textAlign)  cap.style.textAlign  = textEl.style.textAlign;
+    });
+}
+
+function scrollGalleryTo(idx) {
+    const slides = galleryTrack.querySelectorAll('.gallery-slide');
+    if (!slides[idx]) return;
+    slides[idx].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    updateGalleryActive(idx);
+}
+
+function updateGalleryActive(idx) {
+    galleryIndex = idx;
+    galleryTrack.querySelectorAll('.gallery-slide').forEach((s, i) => s.classList.toggle('active', i === idx));
+    galleryDots.querySelectorAll('.gdot').forEach((d, i) => d.classList.toggle('active', i === idx));
+}
+
+galleryPrev.addEventListener('click', () => scrollGalleryTo(Math.max(0, galleryIndex - 1)));
+galleryNext.addEventListener('click', () => {
+    const total = galleryTrack.querySelectorAll('.gallery-slide').length;
+    scrollGalleryTo(Math.min(total - 1, galleryIndex + 1));
+});
+
+// ── Photo focus ───────────────────────────────────────────────────────────────
+function focusPhoto(el, idx) {
+    focusedIndex = idx;
+    // Photostrip slots have no visible caption area of their own, so the
+    // "Título" tool is hidden while a strip photo is focused.
+    footerTituloBtn.style.display = isStripTemplate(lastTemplate) ? 'none' : '';
+    setFooterMode('photo');
+    updateStripFocusHighlight();
+}
+
+function defocusPhoto() {
+    // Disable pan/zoom for previously focused photo
+    if (focusedIndex >= 0) {
+        photoAjusteActive[focusedIndex] = false;
+        enableAjusteCursors(focusedIndex, false);
+    }
+    focusedIndex = -1;
+    setFooterMode('default');
+    closeSheet();
+    document.querySelectorAll('craftools-element').forEach(el => el.deselect?.());
+    updateStripFocusHighlight();
+}
+
+footerDeselectBtn.addEventListener('click', defocusPhoto);
+
+// Cleanly release a selected caption's craftools-element (and forget it) before
+// switching to a footer tool that isn't Legenda. Without this, re-selecting a
+// left-behind caption later (e.g. from a background click) would reopen the old
+// Legenda panel on top of whatever tool the user actually switched to.
+function deselectCaptionIfAny() {
+    if (captionEditingEl) {
+        const el = captionEditingEl;
+        captionEditingEl = null;
+        el.deselect?.();
+    }
+}
+
+// Stop watching whichever cell the Fundo panel had open, if any, before switching
+// to a different footer tool.
+function disconnectBgObserver() {
+    if (bgStateObserver) { bgStateObserver.disconnect(); bgStateObserver = null; }
+}
+
+// Click on gallery background → deselect
+galleryView.addEventListener('mousedown', e => {
+    if (e.target === galleryView || e.target === galleryTrack) defocusPhoto();
+});
+
+// ── Footer mode ───────────────────────────────────────────────────────────────
+function setFooterMode(mode) {
+    setFooterPane(mode); // mode is 'default' or 'photo' — both are footerPanes keys
+}
+
+// ── Footer actions ─────────────────────────────────────────────────────────────
+footerUndoBtn.addEventListener('click', () => {
+    try { HistoryManager.undo(board); } catch {}
+    updateUndoBtn();
+});
+footerShuffleBtn.addEventListener('click', () => generateLayout());
+
+// Título: open caption editor for the focused photo
+footerTituloBtn.addEventListener('click', () => {
+    if (focusedIndex < 0) return;
+    disconnectBgObserver();
+    openCaptionEditor(focusedIndex);
+});
+
+// openCaptionEditor: find or create the craftools-element for a photo's caption, then open sheet
+function openCaptionEditor(idx) {
+    let el = board.querySelector(`craftools-element[data-caption-for="${idx}"]`);
+    if (!el) {
+        el = TextTool.createElement('titulo', null);
+        el.setAttribute('x', '0px'); el.setAttribute('y', '0px');
+        el.setAttribute('w', '200px'); el.setAttribute('h', '32px');
+        el.setAttribute('data-caption-for', String(idx));
+        // Captions need a much smaller default than the 48px "titulo" preset —
+        // otherwise the first line of text overflows the tiny caption strip.
+        const textEl = el.contentArea?.querySelector('[contenteditable]');
+        if (textEl) {
+            textEl.style.fontSize   = '14px';
+            textEl.style.fontWeight = '500';
+            textEl.style.fontFamily = "'DM Sans', sans-serif";
+            textEl.style.color      = '#333333';
+            textEl.style.textAlign  = 'center';
+            textEl.textContent = '';
+        }
+        board.appendChild(el);
+        try { HistoryManager.snapshot(board); } catch {}
+        updateUndoBtn();
+        notify('Legenda adicionada');
+    }
+    captionEditingEl = el;
+    el.select?.();
+    openSheet('Legenda', buildTituloProps(el));
+    syncGalleryCaptions();
+}
+
+// Ajuste: open brightness/contrast/saturation + transform panel for focused photo
+footerAjusteBtn.addEventListener('click', () => {
+    if (focusedIndex < 0) return;
+    deselectCaptionIfAny();
+    disconnectBgObserver();
+    openSheet('Ajuste de foto', buildAjusteProps(focusedIndex));
+});
+
+// Fundo: open background/gradient/API picker for the focused photo. Reuses the
+// same CellBackground/CellPanel/ApiPicker system the main Album editor uses for
+// grid-cell backgrounds — nothing photo_uploader-specific was built for this.
+footerBgBtn.addEventListener('click', () => {
+    if (focusedIndex < 0) return;
+    deselectCaptionIfAny();
+    openBackgroundEditor(focusedIndex);
+});
+
+// Substituir: replace the focused photo's image file — works the same whether
+// it's a standalone photo or one photo inside a strip.
+footerReplaceBtn.addEventListener('click', () => {
+    if (focusedIndex < 0) return;
+    deselectCaptionIfAny();
+    disconnectBgObserver();
+    triggerPhotoReplace(focusedIndex);
+});
+
+// Resolve the DOM "cell" CellBackground should operate on for a given photo index.
+// In strip mode that's the individual .gallery-strip-slot (there's no separate mat/
+// border around each photo). In normal mode it's the whole .gallery-slide, so the
+// background shows through the polaroid-style padding around the smaller
+// .gallery-img-area photo viewport, not just behind the photo itself.
+function getPhotoCellEl(idx) {
+    const slot = galleryTrack.querySelector(`.gallery-strip-slot[data-photo-idx="${idx}"]`);
+    if (slot) return slot;
+    const imgArea = galleryTrack.querySelector(`.gallery-img-area[data-photo-idx="${idx}"]`);
+    return imgArea ? imgArea.closest('.gallery-slide') : null;
+}
+
+let bgStateObserver = null; // watches the currently-open Fundo panel's cell for changes
+
+function openBackgroundEditor(idx) {
+    const cellEl = getPhotoCellEl(idx);
+    if (!cellEl) return;
+    const save = () => savePhotoBackgroundState(idx, cellEl);
+
+    const wrap = document.createElement('div');
+    CellPanel.renderInto(wrap, cellEl, save);
+    openSheet('Fundo da foto', wrap);
+
+    // CellPanel's color/gradient/image sub-panels call CellBackground directly and
+    // only invoke the onChange callback above on "Remover fundo/overlay" — dragging
+    // a color/gradient slider never calls it. Watch the cell's own attributes
+    // instead so every change (including live drags) gets mirrored into
+    // photoBackground[idx], not just explicit clears.
+    if (bgStateObserver) bgStateObserver.disconnect();
+    bgStateObserver = new MutationObserver(save);
+    bgStateObserver.observe(cellEl, {
+        attributes: true,
+        attributeFilter: [
+            'data-bg-type', 'data-bg-value', 'data-bg-position', 'data-bg-size',
+            'data-overlay-url', 'data-overlay-position', 'data-overlay-size', 'data-overlay-opacity',
+            'style',
+        ],
+    });
+}
+
+// CellBackground persists color/gradient/image state as dataset attrs directly on
+// the DOM node — but buildGallery() throws that node away and rebuilds from scratch
+// on every resize / "Reembaralhar" / strip reposition swap. Mirror the state into JS
+// (like adjustState/photoTransforms already do) so it survives rebuilds.
+function savePhotoBackgroundState(idx, cellEl) {
+    const state = CellBackground.getState(cellEl);
+    photoBackground[idx] = {
+        bg: state.bg,
+        overlay: state.overlay,
+        border: {
+            width:  cellEl.style.borderWidth,
+            style:  cellEl.style.borderStyle,
+            color:  cellEl.style.borderColor,
+            radius: cellEl.style.borderRadius,
+        },
+    };
+}
+
+// Re-apply a photo's saved background/overlay/border onto its freshly (re)built cell.
+function restorePhotoBackgroundState(idx, cellEl) {
+    const saved = photoBackground[idx];
+    if (!saved) return;
+    if (saved.bg && saved.bg.type) CellBackground.applyBackground(cellEl, { ...saved.bg, _silent: true });
+    if (saved.overlay && saved.overlay.url) CellBackground.applyOverlay(cellEl, { ...saved.overlay, _silent: true });
+    if (saved.border) {
+        if (saved.border.width)  cellEl.style.borderWidth  = saved.border.width;
+        if (saved.border.style)  cellEl.style.borderStyle  = saved.border.style;
+        if (saved.border.color)  cellEl.style.borderColor  = saved.border.color;
+        if (saved.border.radius) cellEl.style.borderRadius = saved.border.radius;
+    }
+}
+
+// ── craftools-element events ──────────────────────────────────────────────────
+document.addEventListener('craftools-element-select', e => {
+    const el   = e.detail.element;
+    const tool = el.getAttribute('data-craftool');
+    if (tool === 'titulo' || tool === 'paragrafo') {
+        captionEditingEl = el;
+        openSheet('Legenda', buildTituloProps(el));
+    }
+});
+document.addEventListener('craftools-element-deselect', () => {
+    // If we're editing a caption, re-select the element instead of closing the sheet
+    if (captionEditingEl) {
+        requestAnimationFrame(() => captionEditingEl.select?.());
+        return;
+    }
+    closeSheet();
+});
+document.addEventListener('craftools-element-change', () => {
+    try { HistoryManager.snapshot(board); } catch {}
+    updateUndoBtn();
+    syncGalleryCaptions();
+});
+document.addEventListener('craftools-element-delete', () => {
+    closeSheet();
+    try { HistoryManager.snapshot(board); } catch {}
+    updateUndoBtn();
+});
+
+// ── Bottom sheet ──────────────────────────────────────────────────────────────
+function openSheet(title, content) {
+    bsTitle.textContent = title;
+    bsBody.innerHTML = '';
+    bsBody.appendChild(content);
+    bottomSheet.classList.add('open');
+    sheetOverlay.classList.add('visible');
+}
+function closeSheet() {
+    captionEditingEl = null;
+    bottomSheet.classList.remove('open');
+    sheetOverlay.classList.remove('visible');
+    if (bgStateObserver) { bgStateObserver.disconnect(); bgStateObserver = null; }
+    // Disable pan/zoom gestures when sheet closes
+    if (focusedIndex >= 0 && photoAjusteActive[focusedIndex]) {
+        photoAjusteActive[focusedIndex] = false;
+        enableAjusteCursors(focusedIndex, false);
+    }
+}
+bsCloseBtn.addEventListener('click', () => {
+    closeSheet();
+    document.querySelectorAll('craftools-element').forEach(el => el.deselect?.());
+});
+sheetOverlay.addEventListener('click', () => {
+    closeSheet();
+    document.querySelectorAll('craftools-element').forEach(el => el.deselect?.());
+});
+
+// ── Título properties panel ───────────────────────────────────────────────────
+function buildTituloProps(element) {
+    const textEl = element.contentArea?.querySelector('[contenteditable]');
+    if (!textEl) { const d = document.createElement('div'); d.textContent = 'Selecione um título'; return d; }
+
+    const toHex = c => {
+        if (!c || c === 'inherit') return '#1a1a1a';
+        if (c.startsWith('#')) return c;
+        const m = c.match(/(\d+),\s*(\d+),\s*(\d+)/);
+        return m ? '#' + [m[1],m[2],m[3]].map(n => (+n).toString(16).padStart(2,'0')).join('') : '#1a1a1a';
+    };
+    const size   = parseFloat(textEl.style.fontSize) || 40;
+    const color  = toHex(textEl.style.color);
+    const font   = (textEl.style.fontFamily || 'DM Serif Display').replace(/['"]/g,'').split(',')[0].trim();
+    const align  = textEl.style.textAlign || 'center';
+    const bold   = ['700','bold'].includes(textEl.style.fontWeight);
+    const italic = textEl.style.fontStyle === 'italic';
+    const text   = textEl.textContent || '';
+
+    const FONTS = ['DM Serif Display','DM Sans','Open Sans','Pacifico','Lobster','Georgia','Arial','Times New Roman','Parisienne','Dancing Script','Quicksand','Grenze Gotisch'];
+
+    const esc = s => String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+
+    const wrap = document.createElement('div');
+    wrap.innerHTML = `
+        <div class="prop-group">
+            <div class="prop-label">Texto</div>
+            <input type="text" id="pp-text" class="prop-input" placeholder="Digite a legenda..." value="${esc(text)}">
+        </div>
+        <div class="prop-group">
+            <div class="prop-label">Fonte</div>
+            <select id="pp-font" class="prop-input prop-select">
+                ${FONTS.map(f => `<option value="${f}" ${f===font?'selected':''}>${f}</option>`).join('')}
+            </select>
+        </div>
+        <div class="prop-group">
+            <div class="prop-label">Tamanho (px)</div>
+            <div class="prop-row">
+                <input type="range" id="pp-size-r" min="8" max="200" step="1" value="${size}" style="flex:1;accent-color:var(--accent);">
+                <input type="number" id="pp-size-n" class="prop-input" value="${size}" style="width:56px;text-align:center;">
+            </div>
+        </div>
+        <div class="prop-group">
+            <div class="prop-label">Cor</div>
+            <div class="prop-row">
+                <input type="color" id="pp-color" class="prop-color" value="${color}">
+                <span id="pp-color-val" style="font-size:12px;color:var(--text-secondary);flex:1;padding-left:8px;">${color}</span>
+            </div>
+        </div>
+        <div class="prop-group">
+            <div class="prop-label">Estilo &amp; Alinhamento</div>
+            <div class="prop-row">
+                <button class="prop-btn ${bold?'active':''}" id="pp-bold"><span class="material-symbols-outlined">format_bold</span></button>
+                <button class="prop-btn ${italic?'active':''}" id="pp-italic"><span class="material-symbols-outlined">format_italic</span></button>
+                <div style="flex:1"></div>
+                <button class="prop-btn ${align==='left'?'active':''}" data-align="left"><span class="material-symbols-outlined">format_align_left</span></button>
+                <button class="prop-btn ${align==='center'?'active':''}" data-align="center"><span class="material-symbols-outlined">format_align_center</span></button>
+                <button class="prop-btn ${align==='right'?'active':''}" data-align="right"><span class="material-symbols-outlined">format_align_right</span></button>
+            </div>
+        </div>
+        <div class="prop-group">
+            <button class="prop-danger" id="pp-del"><span class="material-symbols-outlined">delete</span>Excluir título</button>
+        </div>`;
+
+    const systemFonts = ['Arial','Times New Roman','Courier New','Georgia','Impact'];
+    const ensureFont = f => {
+        if (systemFonts.includes(f)) return;
+        const id = 'gf-' + f.replace(/\s/g,'-');
+        if (!document.getElementById(id)) {
+            const l = document.createElement('link'); l.id = id; l.rel = 'stylesheet';
+            l.href = `https://fonts.googleapis.com/css2?family=${f.replace(/\s+/g,'+')}:wght@400;700&display=swap`;
+            document.head.appendChild(l);
+        }
+    };
+    ensureFont(font);
+
+    // Every control below mutates the (invisible, off-screen) craftools-element's
+    // contenteditable style, then dispatches 'craftools-element-change'. That event
+    // is already handled globally (see the document-level listener further down),
+    // which snapshots history, refreshes the undo button, AND — crucially —
+    // calls syncGalleryCaptions() to mirror the text + style onto the *visible*
+    // caption in the gallery. Without dispatching this event none of these edits
+    // were ever reflected on screen.
+    const notifyChange = () => {
+        element.dispatchEvent(new CustomEvent('craftools-element-change', { bubbles: true, detail: { element } }));
+    };
+
+    const textInput = wrap.querySelector('#pp-text');
+    textInput.addEventListener('input', e => { textEl.textContent = e.target.value; notifyChange(); });
+    requestAnimationFrame(() => { textInput.focus(); textInput.select(); });
+
+    wrap.querySelector('#pp-font').addEventListener('change', e => { ensureFont(e.target.value); textEl.style.fontFamily = `'${e.target.value}', sans-serif`; notifyChange(); });
+    const sr = wrap.querySelector('#pp-size-r'), sn = wrap.querySelector('#pp-size-n');
+    sr.addEventListener('input', e => { textEl.style.fontSize = e.target.value + 'px'; sn.value = e.target.value; notifyChange(); });
+    sn.addEventListener('input', e => { textEl.style.fontSize = e.target.value + 'px'; sr.value = e.target.value; notifyChange(); });
+    const ci = wrap.querySelector('#pp-color'), cv = wrap.querySelector('#pp-color-val');
+    ci.addEventListener('input', e => { textEl.style.color = e.target.value; cv.textContent = e.target.value; notifyChange(); });
+    wrap.querySelector('#pp-bold').addEventListener('click', function() { textEl.style.fontWeight = textEl.style.fontWeight === '700' ? '400' : '700'; this.classList.toggle('active'); notifyChange(); });
+    wrap.querySelector('#pp-italic').addEventListener('click', function() { textEl.style.fontStyle = textEl.style.fontStyle === 'italic' ? 'normal' : 'italic'; this.classList.toggle('active'); notifyChange(); });
+    wrap.querySelectorAll('[data-align]').forEach(btn => btn.addEventListener('click', function() {
+        textEl.style.textAlign = this.dataset.align;
+        wrap.querySelectorAll('[data-align]').forEach(b => b.classList.remove('active'));
+        this.classList.add('active');
+        notifyChange();
+    }));
+    wrap.querySelector('#pp-del').addEventListener('click', () => {
+        element.remove(); closeSheet();
+        try { HistoryManager.snapshot(board); } catch {}
+        updateUndoBtn();
+        syncGalleryCaptions();
+    });
+    return wrap;
+}
+
+// ── Photo style helpers (filter + transform, mirrors ImageTransform.js pattern) ─
+function getAdjust(idx) {
+    if (!adjustState[idx]) adjustState[idx] = { brightness: 100, contrast: 100, saturation: 100 };
+    return adjustState[idx];
+}
+function getTransform(idx) {
+    if (!photoTransforms[idx]) photoTransforms[idx] = { posX: 0, posY: 0, zoom: 1, rotation: 0 };
+    return photoTransforms[idx];
+}
+// Apply filter + transform to a single <img> element
+function applyPhotoStyle(imgEl, idx) {
+    const a = getAdjust(idx);
+    const t = getTransform(idx);
+    imgEl.style.filter    = `brightness(${a.brightness}%) contrast(${a.contrast}%) saturate(${a.saturation}%)`;
+    imgEl.style.transform = `translate(${t.posX}px,${t.posY}px) scale(${t.zoom}) rotate(${t.rotation}deg)`;
+    imgEl.style.transformOrigin = 'center center';
+}
+// Legacy alias used in a few places
+const applyAdjust = applyPhotoStyle;
+
+// Apply to gallery slide img
+function applyPhotoToAll(idx) {
+    // Works for both plain slides (.gallery-img-area) and photostrip slots
+    // (.gallery-strip-slot) since both carry a matching [data-photo-idx].
+    const container = galleryTrack.querySelector(`[data-photo-idx="${idx}"]`);
+    if (container) { const img = container.querySelector('img'); if (img) applyPhotoStyle(img, idx); }
+}
+// Sync sliders in the open Ajuste sheet after a gesture
+function syncAjusteSliders(idx) {
+    const t = getTransform(idx);
+    const upd = (id, valId, val, fmt) => {
+        const s = bsBody.querySelector('#'+id); if (!s) return;
+        s.value = val;
+        const v = bsBody.querySelector('#'+valId); if (v) v.textContent = fmt(val);
+    };
+    upd('az-zoom',  'az-zoom-val',  t.zoom,     v => Math.round(v*100)+'%');
+    upd('az-rot',   'az-rot-val',   t.rotation, v => (+v).toFixed(0)+'°');
+    upd('az-posX',  'az-posX-val',  Math.round(t.posX), v => (+v).toFixed(0)+'px');
+    upd('az-posY',  'az-posY-val',  Math.round(t.posY), v => (+v).toFixed(0)+'px');
+}
+
+// ── Pan/zoom interactions (same model as ImageTransform.js) ───────────────────
+// Attached to scatter imgWrap and gallery imgArea; enabled only when Ajuste is open.
+function attachPhotoPanZoom(container, idx) {
+    const drag = { on: false, startX: 0, startY: 0, initX: 0, initY: 0 };
+
+    container.style.cursor = '';
+
+    container.addEventListener('pointerdown', e => {
+        if (!photoAjusteActive[idx]) return;
+        drag.on = true;
+        drag.startX = e.clientX; drag.startY = e.clientY;
+        const t = getTransform(idx);
+        drag.initX = t.posX; drag.initY = t.posY;
+        e.stopPropagation();
+        container.style.cursor = 'grabbing';
+        container.setPointerCapture(e.pointerId);
+    });
+
+    container.addEventListener('pointermove', e => {
+        if (!drag.on) return;
+        const t = getTransform(idx);
+        t.posX = drag.initX + (e.clientX - drag.startX);
+        t.posY = drag.initY + (e.clientY - drag.startY);
+        applyPhotoToAll(idx);
+        syncAjusteSliders(idx);
+    });
+
+    const endDrag = e => {
+        if (!drag.on) return;
+        drag.on = false;
+        container.style.cursor = photoAjusteActive[idx] ? 'move' : '';
+        if (e) try { container.releasePointerCapture(e.pointerId); } catch {}
+    };
+    container.addEventListener('pointerup', endDrag);
+    container.addEventListener('pointercancel', endDrag);
+
+    // Scroll = zoom / Ctrl+Scroll = rotation (same as ImageTransform.js)
+    container.addEventListener('wheel', e => {
+        if (!photoAjusteActive[idx]) return;
+        e.preventDefault(); e.stopPropagation();
+        const t = getTransform(idx);
+        if (e.ctrlKey || e.metaKey) {
+            t.rotation = +(t.rotation + (e.deltaY > 0 ? -2 : 2)).toFixed(1);
+        } else {
+            t.zoom = +Math.max(0.3, Math.min(4, t.zoom + (e.deltaY > 0 ? -0.05 : 0.05))).toFixed(3);
+        }
+        applyPhotoToAll(idx);
+        syncAjusteSliders(idx);
+    }, { passive: false });
+}
+
+// ── Ajuste panel (color + transform) ─────────────────────────────────────────
+function buildAjusteProps(idx) {
+    const a = getAdjust(idx);
+    const t = getTransform(idx);
+    const wrap = document.createElement('div');
+
+    // Enable pan/zoom gestures while this panel is open
+    photoAjusteActive[idx] = true;
+    enableAjusteCursors(idx, true);
+
+    // ── Helper: slider row ────────────────────────────────────────────────
+    const sliderRow = (label, id, valId, min, max, step, val, fmt) => {
+        const div = document.createElement('div');
+        div.className = 'adjust-row';
+        div.innerHTML = `<span class="adjust-label">${label}</span>
+            <input type="range" id="${id}" min="${min}" max="${max}" step="${step}" value="${val}"
+                style="flex:1;accent-color:var(--accent);">
+            <span class="adjust-val" id="${valId}">${fmt(val)}</span>`;
+        return div;
+    };
+
+    // ── Cor / Luz section ─────────────────────────────────────────────────
+    const secColor = document.createElement('div');
+    secColor.innerHTML = `<div class="prop-label" style="margin-bottom:8px;">Cor e Luz</div>`;
+    const rowB = sliderRow('Brilho',   'az-bri', 'az-bri-val', 50,  200, 1,   a.brightness, v => v+'%');
+    const rowC = sliderRow('Contraste','az-con', 'az-con-val', 50,  200, 1,   a.contrast,   v => v+'%');
+    const rowS = sliderRow('Saturação','az-sat', 'az-sat-val',  0,  200, 1,   a.saturation, v => v+'%');
+    [rowB,rowC,rowS].forEach(row => {
+        const s = row.querySelector('input'), vEl = row.querySelector('.adjust-val');
+        const keyMap = {'az-bri':'brightness','az-con':'contrast','az-sat':'saturation'};
+        s.addEventListener('input', () => { a[keyMap[s.id]] = +s.value; vEl.textContent = s.value+'%'; applyPhotoToAll(idx); });
+    });
+    secColor.appendChild(rowB); secColor.appendChild(rowC); secColor.appendChild(rowS);
+    wrap.appendChild(secColor);
+
+    // ── Separador ─────────────────────────────────────────────────────────
+    const sep = document.createElement('div');
+    sep.style.cssText = 'height:1px;background:var(--border);margin:14px 0 12px;';
+    wrap.appendChild(sep);
+
+    // ── Posição e Zoom section ────────────────────────────────────────────
+    const secTransform = document.createElement('div');
+    secTransform.innerHTML = `<div class="prop-label" style="margin-bottom:6px;">Posição e Zoom
+        <span style="font-size:10px;font-weight:400;color:var(--text-secondary);margin-left:6px;">
+            (arraste a foto · scroll = zoom · ctrl+scroll = rotação)
+        </span>
+    </div>`;
+
+    const rowZ = sliderRow('Zoom',   'az-zoom','az-zoom-val', 0.3, 4,   0.05, t.zoom,     v => Math.round(v*100)+'%');
+    const rowR = sliderRow('Rotação','az-rot', 'az-rot-val', -180,180,  1,    t.rotation, v => (+v).toFixed(0)+'°');
+
+    rowZ.querySelector('input').addEventListener('input', e => {
+        t.zoom = +e.target.value; rowZ.querySelector('.adjust-val').textContent = Math.round(t.zoom*100)+'%';
+        applyPhotoToAll(idx);
+    });
+    rowR.querySelector('input').addEventListener('input', e => {
+        t.rotation = +e.target.value; rowR.querySelector('.adjust-val').textContent = (+t.rotation).toFixed(0)+'°';
+        applyPhotoToAll(idx);
+    });
+    secTransform.appendChild(rowZ);
+    secTransform.appendChild(rowR);
+
+    const rowX = sliderRow('Posição X', 'az-posX', 'az-posX-val', -300, 300, 1, Math.round(t.posX), v => (+v).toFixed(0)+'px');
+    const rowY = sliderRow('Posição Y', 'az-posY', 'az-posY-val', -300, 300, 1, Math.round(t.posY), v => (+v).toFixed(0)+'px');
+    rowX.querySelector('input').addEventListener('input', e => {
+        t.posX = +e.target.value; rowX.querySelector('.adjust-val').textContent = (+t.posX).toFixed(0)+'px';
+        applyPhotoToAll(idx);
+    });
+    rowY.querySelector('input').addEventListener('input', e => {
+        t.posY = +e.target.value; rowY.querySelector('.adjust-val').textContent = (+t.posY).toFixed(0)+'px';
+        applyPhotoToAll(idx);
+    });
+    secTransform.appendChild(rowX);
+    secTransform.appendChild(rowY);
+    wrap.appendChild(secTransform);
+
+    // ── Reset button ──────────────────────────────────────────────────────
+    const sep2 = document.createElement('div');
+    sep2.style.cssText = 'height:1px;background:var(--border);margin:14px 0 12px;';
+    wrap.appendChild(sep2);
+
+    const resetBtn = document.createElement('button');
+    resetBtn.className = 'adjust-reset-btn';
+    resetBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size:15px;">restart_alt</span>Restaurar padrão';
+    resetBtn.addEventListener('click', () => {
+        adjustState[idx]    = { brightness: 100, contrast: 100, saturation: 100 };
+        photoTransforms[idx] = { posX: 0, posY: 0, zoom: 1, rotation: 0 };
+        applyPhotoToAll(idx);
+        openSheet('Ajuste de foto', buildAjusteProps(idx));
+    });
+    wrap.appendChild(resetBtn);
+    return wrap;
+}
+
+function enableAjusteCursors(idx, on) {
+    const container = galleryTrack.querySelector(`[data-photo-idx="${idx}"]`);
+    if (container) container.style.cursor = on ? 'move' : '';
+}
+
+// ── Undo ──────────────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        e.preventDefault();
+        try { HistoryManager.undo(board); } catch {}
+        updateUndoBtn();
+    }
+});
+function updateUndoBtn() {
+    topbarUndoBtn.disabled = footerUndoBtn.disabled = !HistoryManager.canUndo;
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+let _nt;
+function notify(msg) {
+    notifyEl.textContent = msg;
+    notifyEl.classList.add('show');
+    clearTimeout(_nt);
+    _nt = setTimeout(() => notifyEl.classList.remove('show'), 2600);
+}
+
+// ── Upload-link "Salvar" (submits photos + layout to craftools_api) ───────────
+// Only active when this page was opened through a client upload link (see the
+// UPLOAD_LINK_DATA_MARKER near the top of <head>). Reuses the state the rest of
+// the editor already tracks in memory — photos/captions/photoBackground/
+// adjustState/photoTransforms — nothing new was built just to track this data.
+if (window.UPLOAD_LINK && window.UPLOAD_LINK.saveUrl) {
+    const footerSaveBtn = document.getElementById('footer-save-btn');
+    if (footerSaveBtn) footerSaveBtn.hidden = false;
+
+    // Reads text + style straight off each caption's contenteditable node —
+    // the exact same properties buildTituloProps() reads/writes above.
+    function collectCaptions() {
+        const out = {};
+        board.querySelectorAll('craftools-element[data-caption-for]').forEach(el => {
+            const idx = el.getAttribute('data-caption-for');
+            const t = el.contentArea?.querySelector('[contenteditable]');
+            if (!t) return;
+            out[idx] = {
+                text: t.textContent || '',
+                fontFamily: t.style.fontFamily || '',
+                fontSize: t.style.fontSize || '',
+                fontWeight: t.style.fontWeight || '',
+                fontStyle: t.style.fontStyle || '',
+                color: t.style.color || '',
+                textAlign: t.style.textAlign || '',
+            };
+        });
+        return out;
+    }
+
+    function setSaveBtnBusy(busy) {
+        footerSaveBtn.disabled = busy;
+        const icon = footerSaveBtn.querySelector('.material-symbols-outlined');
+        if (icon) icon.textContent = busy ? 'hourglass_top' : 'cloud_upload';
+    }
+
+    async function submitToServer() {
+        if (!photos.length) { notify('Envie pelo menos uma foto antes de salvar'); return; }
+        setSaveBtnBusy(true);
+        try {
+            const form = new FormData();
+            form.append('token', window.UPLOAD_LINK.token);
+
+            const meta = {
+                clientName: window.UPLOAD_LINK.clientName,
+                gridSizeName: window.UPLOAD_LINK.gridSize?.name || '',
+                captions: collectCaptions(),
+                backgrounds: photoBackground,
+                adjust: adjustState,
+                transforms: photoTransforms,
+                photos: [],
+            };
+            // photo.url is a data: URL (FileReader.readAsDataURL) — fetch() can read
+            // it directly and hand back a real Blob for multipart upload, so photos
+            // don't need to travel as base64 text inside the JSON body.
+            for (let i = 0; i < photos.length; i++) {
+                const p = photos[i];
+                const blob = await (await fetch(p.url)).blob();
+                const ext = (blob.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
+                const filename = `foto_${i + 1}.${ext}`;
+                form.append('photos[]', blob, filename);
+                meta.photos.push({ index: i, filename, originalName: p.name, width: p.width, height: p.height });
+            }
+            form.append('meta', JSON.stringify(meta));
+
+            const res = await fetch(window.UPLOAD_LINK.saveUrl, { method: 'POST', body: form });
+            const data = await res.json().catch(() => null);
+            if (!res.ok || !data || data.status !== 'success') {
+                throw new Error((data && data.message) || 'Falha ao salvar. Tente novamente.');
+            }
+            showSubmittedOverlay();
+        } catch (err) {
+            notify(err.message || 'Falha ao salvar. Tente novamente.');
+            setSaveBtnBusy(false);
+        }
+    }
+
+    function showSubmittedOverlay() {
+        const ov = document.createElement('div');
+        ov.style.cssText = 'position:fixed;inset:0;background:rgba(255,255,255,0.97);z-index:9999;'
+            + 'display:flex;flex-direction:column;align-items:center;justify-content:center;'
+            + 'text-align:center;padding:32px;gap:12px;';
+        ov.innerHTML = `
+            <span class="material-symbols-outlined" style="font-size:56px;color:var(--accent);">check_circle</span>
+            <h2 style="margin:0;font-family:'DM Sans',sans-serif;">Fotos enviadas!</h2>
+            <p style="max-width:340px;color:var(--text-secondary);margin:0;">
+                Recebemos suas fotos e o layout. Nossa equipe já vai começar a preparar o seu kit
+                — não é mais possível editar por este link.
+            </p>`;
+        document.body.appendChild(ov);
+    }
+
+    footerSaveBtn?.addEventListener('click', submitToServer);
+}
+</script>
+</body>
+</html>

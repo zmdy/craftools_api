@@ -27,3 +27,9 @@ assets/original/overlays/*
 # Generated WebP assets served by the public API
 public/v1/assets/*
 !public/v1/assets/.gitkeep
+
+# Fotos enviadas por clientes via links de upload (public/upload.php) — dados
+# pessoais de clientes, nunca versionados. Servidas só por
+# public/upload_link_photo.php (autenticado), nunca por URL direta.
+storage/uploads/*
+!storage/uploads/.gitkeep

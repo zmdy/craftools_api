@@ -98,6 +98,13 @@ require_once __DIR__ . '/repo.php';
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/api_auth.php';
 require_once __DIR__ . '/images.php';
+require_once __DIR__ . '/upload_links.php';
 
 // Garante que o banco/schema existe desde a primeira requisição.
 db();
+
+// upload_links é um recurso adicionado depois do schema.sql inicial — bancos
+// já instalados não re-executam schema.sql (só roda em banco novo, ver db()),
+// então a tabela precisa ser garantida aqui também. CREATE TABLE/INDEX IF NOT
+// EXISTS é barato o suficiente para rodar em toda requisição.
+uploadLinksEnsureSchema();

@@ -129,6 +129,42 @@ try {
             }
             break;
 
+        // ------------------------------------------------------- upload_links
+        case 'upload_links':
+            if ($action === 'create') {
+                $clientName = trim((string) ($_POST['client_name'] ?? ''));
+                $gridSizeId = !empty($_POST['grid_size_id']) ? (int) $_POST['grid_size_id'] : null;
+                $notes = trim((string) ($_POST['notes'] ?? ''));
+                $photoCount = intInput($_POST, 'photo_count', 0, 0, 500);
+
+                if ($clientName === '') {
+                    flashRedirect('error', 'O nome do cliente é obrigatório.', 'index.php?page=upload_links');
+                }
+                if ($gridSizeId === null || !gridSizeFind($gridSizeId)) {
+                    flashRedirect('error', 'Selecione um kit (tamanho de grid) válido.', 'index.php?page=upload_links');
+                }
+
+                $result = uploadLinkCreate($clientName, $gridSizeId, $photoCount, $notes, $adminId);
+                auditLog($adminId, 'create', 'upload_links', (string) $result['id']);
+                $_SESSION['flash'] = ['type' => 'success', 'msg' => 'Link criado com sucesso. Copie agora e envie para o cliente.'];
+                $_SESSION['reveal_upload_link'] = uploadLinkFullUrl($result['raw_token']);
+                header('Location: index.php?page=upload_links');
+                exit;
+            }
+            if ($action === 'reopen') {
+                $id = (int) ($_POST['id'] ?? 0);
+                uploadLinkReopen($id);
+                auditLog($adminId, 'update', 'upload_links', (string) $id);
+                flashRedirect('success', 'Link reaberto para o cliente enviar novamente.', 'index.php?page=upload_links');
+            }
+            if ($action === 'delete') {
+                $id = (int) ($_POST['id'] ?? 0);
+                uploadLinkDelete($id);
+                auditLog($adminId, 'delete', 'upload_links', (string) $id);
+                flashRedirect('success', 'Link e fotos enviadas removidos.', 'index.php?page=upload_links');
+            }
+            break;
+
         // -------------------------------------------------------------- phrases
         case 'phrases':
             if ($action === 'save') {

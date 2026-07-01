@@ -187,3 +187,28 @@ CREATE TABLE IF NOT EXISTS login_attempts (
     created_at      TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_login_attempts_ip_time ON login_attempts(ip, created_at);
+
+-- ── Links de upload de fotos para clientes (nonce de uso único) ─────────────
+-- O admin cria o link já escolhendo o kit (grid_size) e a quantidade de fotos;
+-- o token bruto nunca é persistido, só o hash SHA-256 (mesmo esquema de
+-- api_tokens). submission_json guarda legendas/fundo/ajustes de cada foto
+-- enviada (os arquivos em si ficam em storage/uploads/<uuid>/), preenchido
+-- só depois que o cliente clica em "Salvar" — a partir daí status vira
+-- 'submitted' e o link fica travado (ver uploadLinkResolveByToken()).
+CREATE TABLE IF NOT EXISTS upload_links (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    uuid            TEXT NOT NULL UNIQUE,
+    client_name     TEXT NOT NULL,
+    grid_size_id    INTEGER NULL REFERENCES grid_sizes(id) ON DELETE SET NULL,
+    photo_count     INTEGER NOT NULL DEFAULT 0,
+    notes           TEXT NULL,
+    token_hash      TEXT NOT NULL UNIQUE,
+    token_prefix    TEXT NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','submitted')),
+    admin_id        INTEGER NULL REFERENCES admin_users(id) ON DELETE SET NULL,
+    submission_json TEXT NULL,
+    submitted_at    TEXT NULL,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_upload_links_hash ON upload_links(token_hash);
