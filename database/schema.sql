@@ -188,13 +188,19 @@ CREATE TABLE IF NOT EXISTS login_attempts (
 );
 CREATE INDEX IF NOT EXISTS idx_login_attempts_ip_time ON login_attempts(ip, created_at);
 
--- ── Links de upload de fotos para clientes (nonce de uso único) ─────────────
--- O admin cria o link já escolhendo o kit (grid_size) e a quantidade de fotos;
--- o token bruto nunca é persistido, só o hash SHA-256 (mesmo esquema de
--- api_tokens). submission_json guarda legendas/fundo/ajustes de cada foto
--- enviada (os arquivos em si ficam em storage/uploads/<uuid>/), preenchido
--- só depois que o cliente clica em "Salvar" — a partir daí status vira
--- 'submitted' e o link fica travado (ver uploadLinkResolveByToken()).
+-- ── Links de upload de fotos para clientes ──────────────────────────────────
+-- O admin cria o link já escolhendo o kit (grid_size) e a quantidade de fotos.
+-- Diferente de api_tokens (credencial de API, valor em texto puro nunca
+-- persistido), este é um link compartilhável — o admin precisa poder copiá-lo
+-- de novo a qualquer momento (não só na criação) —, então o valor em texto
+-- puro fica salvo em `token` mesmo. token_hash/token_prefix continuam
+-- existindo para a busca indexada (uploadLinkResolveByToken()) e para
+-- identificar o link mesmo se `token` estiver vazio (linhas criadas antes
+-- desta coluna existir — usar "Gerar novo link" nesse caso).
+-- submission_json guarda legendas/fundo/ajustes de cada foto enviada (os
+-- arquivos em si ficam em storage/uploads/<uuid>/), preenchido só depois que
+-- o cliente clica em "Salvar" — a partir daí status vira 'submitted' e o link
+-- fica travado.
 CREATE TABLE IF NOT EXISTS upload_links (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     uuid            TEXT NOT NULL UNIQUE,
@@ -202,6 +208,7 @@ CREATE TABLE IF NOT EXISTS upload_links (
     grid_size_id    INTEGER NULL REFERENCES grid_sizes(id) ON DELETE SET NULL,
     photo_count     INTEGER NOT NULL DEFAULT 0,
     notes           TEXT NULL,
+    token           TEXT NULL,
     token_hash      TEXT NOT NULL UNIQUE,
     token_prefix    TEXT NOT NULL,
     status          TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','submitted')),

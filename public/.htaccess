@@ -13,6 +13,16 @@
 Options -Indexes
 Options -MultiViews
 
+# Link de upload do cliente: exibe/aceita "/upload" (sem .php) e reescreve
+# internamente para upload.php, mantendo a query string (?token=...) — só
+# cosmético, upload.php continua acessível diretamente também.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^upload/?$ upload.php [L]
+</IfModule>
+
 # Nunca servir os arquivos de configuração se alguém copiar o .env para aqui por engano.
 <FilesMatch "(^\.env|\.sql$|\.md$)">
     <IfModule mod_authz_core.c>

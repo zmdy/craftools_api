@@ -4,9 +4,11 @@
  *
  * O admin cria um link já escolhendo o kit (grid_size) e a quantidade de
  * fotos; o cliente só recebe a URL e faz o upload em public/upload.php.
- * Mesmo esquema de token de api_auth.php: bin2hex(random_bytes(32)) em
- * texto puro só existe uma vez (na criação/exibição), e apenas o hash
- * SHA-256 fica no banco.
+ * Diferente de api_tokens (credencial de API), este é um link compartilhável
+ * — o valor em texto puro fica salvo em `token` para poder ser copiado a
+ * qualquer momento pelo painel, não só na criação. token_hash/token_prefix
+ * continuam existindo para a busca indexada e para identificar links criados
+ * antes desta coluna existir.
  */
 
 /** Cria a tabela se ainda não existir — necessário para bancos já instalados
@@ -19,6 +21,7 @@ function uploadLinksEnsureSchema(): void {
         grid_size_id    INTEGER NULL REFERENCES grid_sizes(id) ON DELETE SET NULL,
         photo_count     INTEGER NOT NULL DEFAULT 0,
         notes           TEXT NULL,
+        token           TEXT NULL,
         token_hash      TEXT NOT NULL UNIQUE,
         token_prefix    TEXT NOT NULL,
         status          TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','submitted')),
@@ -29,6 +32,21 @@ function uploadLinksEnsureSchema(): void {
         updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
     )");
     db()->exec('CREATE INDEX IF NOT EXISTS idx_upload_links_hash ON upload_links(token_hash)');
+
+    // `token` foi adicionado depois da criação inicial da tabela — bancos que já
+    // tinham upload_links sem essa coluna precisam de um ALTER TABLE (SQLite não
+    // tem "ADD COLUMN IF NOT EXISTS", então checa via PRAGMA antes).
+    $cols = db()->query('PRAGMA table_info(upload_links)')->fetchAll();
+    $hasTokenCol = false;
+    foreach ($cols as $col) {
+        if ($col['name'] === 'token') {
+            $hasTokenCol = true;
+            break;
+        }
+    }
+    if (!$hasTokenCol) {
+        db()->exec('ALTER TABLE upload_links ADD COLUMN token TEXT NULL');
+    }
 }
 
 /** Gera um novo token (mesmo formato de generateApiTokenValue() em api_auth.php). */
@@ -86,6 +104,7 @@ function uploadLinkCreate(string $clientName, ?int $gridSizeId, int $photoCount,
         'grid_size_id' => $gridSizeId,
         'photo_count' => $photoCount,
         'notes' => trim($notes),
+        'token' => $gen['raw'],
         'token_hash' => $gen['hash'],
         'token_prefix' => $gen['prefix'],
         'status' => 'pending',
@@ -94,6 +113,25 @@ function uploadLinkCreate(string $clientName, ?int $gridSizeId, int $photoCount,
         'updated_at' => nowSql(),
     ]);
     return ['id' => $id, 'raw_token' => $gen['raw']];
+}
+
+/**
+ * Gera um novo token para um link já existente (ex.: link criado antes da
+ * coluna `token` existir, ou o admin suspeita que o link vazou). O link em si
+ * (uuid, cliente, kit, status, fotos já enviadas) continua o mesmo — só o
+ * segredo da URL muda, invalidando qualquer cópia anterior.
+ *
+ * @return array{raw_token:string}
+ */
+function uploadLinkRegenerateToken(int $id): array {
+    $gen = uploadLinkGenerateToken();
+    repoUpdate('upload_links', $id, [
+        'token' => $gen['raw'],
+        'token_hash' => $gen['hash'],
+        'token_prefix' => $gen['prefix'],
+        'updated_at' => nowSql(),
+    ]);
+    return ['raw_token' => $gen['raw']];
 }
 
 /** Marca o link como enviado e trava (uploadLinkResolveByToken continua
@@ -123,7 +161,8 @@ function uploadLinkDelete(int $id): void {
     }
 }
 
-/** Monta a URL completa e clicável para o painel mostrar/copiar. */
+/** Monta a URL completa e clicável para o painel mostrar/copiar. Usa "/upload"
+ *  sem ".php" — public/.htaccess reescreve isso internamente para upload.php. */
 function uploadLinkFullUrl(string $rawToken): string {
     $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
         || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
@@ -131,7 +170,7 @@ function uploadLinkFullUrl(string $rawToken): string {
     $host = $_SERVER['HTTP_HOST'] ?? '127.0.0.1';
     // index.php roda em public/ — o mesmo diretório onde upload.php vai morar.
     $base = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/public/index.php'), '/');
-    return "{$scheme}://{$host}{$base}/upload.php?token={$rawToken}";
+    return "{$scheme}://{$host}{$base}/upload?token={$rawToken}";
 }
 
 /** Remove recursivamente uma pasta de uploads (equivalente a removeDirRecursive()

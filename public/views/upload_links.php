@@ -1,8 +1,9 @@
 <?php
 /**
  * upload_links.php (view) — cria e gerencia links de upload de fotos para
- * clientes. Segue o mesmo padrão de tokens.php: o valor completo do link só
- * é exibido uma vez, na criação (só o hash do token fica salvo no banco).
+ * clientes. O valor em texto puro do link fica salvo em `token` (diferente de
+ * api_tokens) justamente para poder ser copiado a qualquer momento, não só na
+ * criação — ver comentário em database/schema.sql.
  */
 $viewUuid = (string) ($_GET['view'] ?? '');
 $viewLink = $viewUuid !== '' ? uploadLinkFindByUuid($viewUuid) : null;
@@ -30,6 +31,15 @@ if ($viewLink) {
                 <div class="field"><label>Fotos enviadas</label><div><?= count($photoFiles) ?></div></div>
                 <div class="field"><label>Enviado em</label><div><?= e($viewLink['submitted_at'] ?? '—') ?></div></div>
             </div>
+            <?php if (!empty($viewLink['token'])): ?>
+                <div class="field">
+                    <label>Link</label>
+                    <div class="token-reveal d-flex flex-between">
+                        <span id="view-link-url" class="mono" style="word-break:break-all;"><?= e(uploadLinkFullUrl($viewLink['token'])) ?></span>
+                        <button type="button" class="btn btn-sm btn-secondary" data-copy="#view-link-url">Copiar</button>
+                    </div>
+                </div>
+            <?php endif; ?>
             <?php if ($viewLink['notes']): ?>
                 <div class="field"><label>Observações</label><div><?= nl2br(e($viewLink['notes'])) ?></div></div>
             <?php endif; ?>
@@ -79,8 +89,8 @@ if ($viewLink) {
         <div class="card-head"><h2>Link criado</h2></div>
         <div class="card-body">
             <p class="help-text" style="margin-bottom:8px;">
-                Copie agora e envie para o cliente: por segurança, este link completo não será exibido de novo
-                (a lista abaixo mostra só um prefixo, só para identificação).
+                Copie e envie para o cliente (o link também pode ser copiado depois, a qualquer momento,
+                pela lista abaixo).
             </p>
             <div class="token-reveal d-flex flex-between">
                 <span id="new-link-value" class="mono" style="word-break:break-all;"><?= e($reveal) ?></span>
@@ -151,6 +161,21 @@ if ($viewLink) {
                         <td class="text-muted" style="font-size:12px;"><?= e($l['created_at']) ?></td>
                         <td class="actions">
                             <a href="index.php?page=upload_links&view=<?= e($l['uuid']) ?>" class="btn btn-secondary btn-sm">Ver</a>
+                            <?php if (!empty($l['token'])): ?>
+                                <input type="text" id="link-url-<?= (int) $l['id'] ?>" value="<?= e(uploadLinkFullUrl($l['token'])) ?>" hidden>
+                                <button type="button" class="btn btn-outline btn-sm" data-copy="#link-url-<?= (int) $l['id'] ?>">
+                                    <span class="material-symbols-outlined" style="font-size:15px;">content_copy</span> Copiar link
+                                </button>
+                            <?php else: ?>
+                                <!-- Link criado antes desta coluna existir -- o valor em texto puro nunca
+                                     foi salvo (só o hash), então não dá para reconstruir; só regenerar. -->
+                                <form method="post" action="index.php?page=upload_links" style="display:inline;" data-confirm="Gerar um novo link para este cliente? O link antigo para de funcionar.">
+                                    <?= csrfField() ?>
+                                    <input type="hidden" name="_action" value="regenerate">
+                                    <input type="hidden" name="id" value="<?= (int) $l['id'] ?>">
+                                    <button type="submit" class="btn btn-outline btn-sm">Gerar novo link</button>
+                                </form>
+                            <?php endif; ?>
                             <?php if ($l['status'] === 'submitted'): ?>
                             <form method="post" action="index.php?page=upload_links" style="display:inline;" data-confirm="Reabrir este link para o cliente enviar de novo?">
                                 <?= csrfField() ?>

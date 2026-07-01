@@ -157,6 +157,15 @@ try {
                 auditLog($adminId, 'update', 'upload_links', (string) $id);
                 flashRedirect('success', 'Link reaberto para o cliente enviar novamente.', 'index.php?page=upload_links');
             }
+            if ($action === 'regenerate') {
+                $id = (int) ($_POST['id'] ?? 0);
+                $result = uploadLinkRegenerateToken($id);
+                auditLog($adminId, 'update', 'upload_links', (string) $id, 'token regenerated');
+                $_SESSION['flash'] = ['type' => 'success', 'msg' => 'Novo link gerado. O link anterior parou de funcionar.'];
+                $_SESSION['reveal_upload_link'] = uploadLinkFullUrl($result['raw_token']);
+                header('Location: index.php?page=upload_links');
+                exit;
+            }
             if ($action === 'delete') {
                 $id = (int) ($_POST['id'] ?? 0);
                 uploadLinkDelete($id);
