@@ -66,6 +66,22 @@ function ensureAdditiveSchema(PDO $pdo): void {
         CREATE UNIQUE INDEX IF NOT EXISTS idx_emoji_kitchen_pair ON emoji_kitchen_combos(left_codepoint, right_codepoint);
         CREATE INDEX IF NOT EXISTS idx_emoji_kitchen_left ON emoji_kitchen_combos(left_codepoint);
         CREATE INDEX IF NOT EXISTS idx_emoji_kitchen_right ON emoji_kitchen_combos(right_codepoint);
+
+        CREATE TABLE IF NOT EXISTS phrase_collections (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            uuid            TEXT NOT NULL UNIQUE,
+            name            TEXT NOT NULL UNIQUE,
+            sort_order      INTEGER NOT NULL DEFAULT 0,
+            active          INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0,1)),
+            created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS phrase_collection_links (
+            phrase_id       INTEGER NOT NULL REFERENCES phrases(id) ON DELETE CASCADE,
+            collection_id   INTEGER NOT NULL REFERENCES phrase_collections(id) ON DELETE CASCADE,
+            PRIMARY KEY (phrase_id, collection_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_phrase_collection_links_collection ON phrase_collection_links(collection_id);
     ");
 }
 

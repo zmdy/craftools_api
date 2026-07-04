@@ -1,5 +1,6 @@
 <?php
 // Não precisa de checagem adicional: index.php já garante sessão admin
+$existingCollections = phraseCollectionNames();
 ?>
 
 <div class="card">
@@ -42,6 +43,14 @@
                 <div class="field" style="flex:1;">
                     <label for="csv-file">Arquivo CSV</label>
                     <input type="file" id="csv-file" accept=".csv,text/csv" style="display:block; padding:6px 0;">
+                </div>
+                <div class="field" style="flex:1;">
+                    <label for="csv-collection">Coleção de frases <small class="text-muted">(opcional)</small></label>
+                    <input type="text" id="csv-collection" placeholder="Ex: Ano Novo 2026" list="csv-collection-suggestions">
+                    <datalist id="csv-collection-suggestions">
+                        <?php foreach ($existingCollections as $c): ?><option value="<?= e($c) ?>"><?php endforeach; ?>
+                    </datalist>
+                    <div class="help-text">Todas as frases deste arquivo entram nesta coleção (criada automaticamente se ainda não existir).</div>
                 </div>
                 <div class="field">
                     <label for="csv-default-tier">Tier padrão</label>

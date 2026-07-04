@@ -189,12 +189,19 @@ try {
                 if (empty($_POST['phrase']) || empty($_POST['tier'])) {
                     flashRedirect('error', 'O texto da frase e o tier são obrigatórios.', 'index.php?page=phrases');
                 }
+                // Coleção: campo livre (escolhe uma existente ou digita uma nova).
+                // Vazio remove o vínculo de coleção da frase.
+                $collectionName = trim((string) ($_POST['collection'] ?? ''));
+                $collectionId   = $collectionName !== '' ? phraseCollectionFindOrCreateByName($collectionName) : null;
+
                 if ($id > 0) {
                     phraseUpdate($id, $_POST);
+                    phraseSetCollection($id, $collectionId);
                     auditLog($adminId, 'update', 'phrases', (string) $id);
                     flashRedirect('success', 'Frase atualizada.', 'index.php?page=phrases');
                 }
                 $newId = phraseCreate($_POST);
+                phraseSetCollection($newId, $collectionId);
                 auditLog($adminId, 'create', 'phrases', (string) $newId);
                 flashRedirect('success', 'Frase criada.', 'index.php?page=phrases');
             }

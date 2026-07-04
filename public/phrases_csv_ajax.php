@@ -48,6 +48,12 @@ if (count($itemsRaw) > PHRASES_CSV_MAX_BATCH) {
     csvAjaxError(400, 'Lote grande demais (máximo ' . PHRASES_CSV_MAX_BATCH . ' itens por requisição).');
 }
 
+// Coleção (opcional): todas as frases deste import entram na mesma coleção,
+// criada automaticamente na primeira vez que este nome aparece (find-or-create
+// é idempotente -- os lotes seguintes do mesmo import reaproveitam o mesmo id).
+$collectionName = trim((string) ($_POST['collection'] ?? ''));
+$collectionId    = $collectionName !== '' ? phraseCollectionFindOrCreateByName($collectionName) : null;
+
 $results = [];
 
 foreach ($itemsRaw as $item) {
@@ -70,6 +76,10 @@ foreach ($itemsRaw as $item) {
             'tier'     => $tier,
             'active'   => 1,
         ]);
+
+        if ($collectionId !== null) {
+            phraseSetCollection($newId, $collectionId);
+        }
 
         auditLog($adminId, 'create', 'phrases', (string) $newId);
 

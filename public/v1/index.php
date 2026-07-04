@@ -56,9 +56,9 @@ if (isset($tokenResult['error'])) {
 $tier = $tokenResult['tier'] ?? 'free';
 
 $resource = isset($_GET['resource']) ? strtolower(trim((string) $_GET['resource'])) : '';
-$validResources = ['grid-sizes', 'album-templates', 'phrases', 'assets', 'backgrounds', 'overlays', 'collection', 'emoji-kitchen'];
+$validResources = ['grid-sizes', 'album-templates', 'phrases', 'phrase-collections', 'assets', 'backgrounds', 'overlays', 'collection', 'emoji-kitchen'];
 if (!in_array($resource, $validResources, true)) {
-    v1JsonError(400, 'Recurso inválido. Disponíveis: grid-sizes, album-templates, phrases, assets, backgrounds, overlays, collection, emoji-kitchen.');
+    v1JsonError(400, 'Recurso inválido. Disponíveis: grid-sizes, album-templates, phrases, phrase-collections, assets, backgrounds, overlays, collection, emoji-kitchen.');
 }
 
 $data = [];
@@ -71,11 +71,21 @@ switch ($resource) {
         $data = albumTemplateListActiveForTier($tier);
         break;
 
+    // ?resource=phrases&collection=Ano+Novo+2026 -- "1º nível" de filtro
+    // (tema/conjunto); category continua sendo o "2º nível", aplicado sobre
+    // as frases já restritas à coleção.
     case 'phrases':
         $category = isset($_GET['category']) ? (string) $_GET['category'] : null;
         $language = isset($_GET['language']) ? (string) $_GET['language'] : null;
+        $collection = isset($_GET['collection']) ? (string) $_GET['collection'] : null;
         $limit = intInput($_GET, 'limit', 50, 1, 200);
-        $data = phraseListActiveForTier($tier, $category, $language, $limit);
+        $data = phraseListActiveForTier($tier, $category, $language, $limit, $collection);
+        break;
+
+    // ?resource=phrase-collections -- lista os nomes das coleções de frases
+    // ativas, usado para popular o seletor de "Coleção" no craftools.
+    case 'phrase-collections':
+        $data = phraseCollectionNames();
         break;
 
     case 'assets':

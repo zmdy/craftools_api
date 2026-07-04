@@ -3,6 +3,7 @@
     if (!app) return;
 
     const fileInput    = document.getElementById('csv-file');
+    const collectionInput = document.getElementById('csv-collection');
     const defaultTier  = document.getElementById('csv-default-tier');
     const defaultLang  = document.getElementById('csv-default-lang');
     const preview      = document.getElementById('csv-preview');
@@ -123,6 +124,7 @@
 
         startBtn.disabled   = true;
         fileInput.disabled  = true;
+        if (collectionInput) collectionInput.disabled = true;
         progressWrap.hidden = false;
         doneBox.hidden      = true;
         errorLog.innerHTML  = '';
@@ -161,6 +163,7 @@
             var body = new FormData();
             body.append('_csrf', CSRF);
             body.append('items', JSON.stringify(batch));
+            body.append('collection', (collectionInput && collectionInput.value || '').trim());
 
             fetch('phrases_csv_ajax.php', { method: 'POST', body: body })
                 .then(function (res) { return res.json(); })

@@ -158,6 +158,28 @@ CREATE TABLE IF NOT EXISTS phrases (
 );
 CREATE INDEX IF NOT EXISTS idx_phrases_lang_cat ON phrases(language, category);
 
+-- ── Coleções de frases (agrupamento por tema/conjunto, ex.: "Ano Novo 2026") ─
+-- Independente de category/author (que são atributos livres da frase em si):
+-- uma coleção é um agrupamento nomeado, escolhido/criado no import CSV ou no
+-- cadastro manual. Vínculo em tabela separada (N:N na estrutura) para não
+-- exigir ALTER TABLE em phrases já existente -- hoje usado como 0..1 por frase.
+CREATE TABLE IF NOT EXISTS phrase_collections (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    uuid            TEXT NOT NULL UNIQUE,
+    name            TEXT NOT NULL UNIQUE,
+    sort_order      INTEGER NOT NULL DEFAULT 0,
+    active          INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0,1)),
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS phrase_collection_links (
+    phrase_id       INTEGER NOT NULL REFERENCES phrases(id) ON DELETE CASCADE,
+    collection_id   INTEGER NOT NULL REFERENCES phrase_collections(id) ON DELETE CASCADE,
+    PRIMARY KEY (phrase_id, collection_id)
+);
+CREATE INDEX IF NOT EXISTS idx_phrase_collection_links_collection ON phrase_collection_links(collection_id);
+
 -- ── Combos do Emoji Kitchen (importados do metadata.json de
 -- https://github.com/xsalazar/emoji-kitchen via painel admin) ───────────────
 -- As imagens NÃO são baixadas/hospedadas -- image_url guarda a URL pública do

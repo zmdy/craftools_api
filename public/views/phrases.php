@@ -3,9 +3,16 @@ $editId          = (int) ($_GET['edit'] ?? 0);
 $editing         = $editId > 0 ? phraseFind($editId) : null;
 $filterCategory  = (string) ($_GET['category'] ?? '');
 $filterAuthor    = (string) ($_GET['author'] ?? '');
-$rows            = phraseList($filterCategory !== '' ? $filterCategory : null, $filterAuthor !== '' ? $filterAuthor : null);
+$filterCollection = (string) ($_GET['collection'] ?? '');
+$rows            = phraseList(
+    $filterCategory !== '' ? $filterCategory : null,
+    $filterAuthor !== '' ? $filterAuthor : null,
+    $filterCollection !== '' ? $filterCollection : null
+);
 $categories      = phraseCategories();
 $authors         = phraseAuthors();
+$collectionNames = phraseCollectionNames();
+$editingCollection = $editing ? phraseCollectionForPhrase((int) $editing['id']) : null;
 
 // Converte o campo category (CSV) em string legível para o formulário de edição
 $editingCategoryDisplay = '';
@@ -36,6 +43,13 @@ if ($editing) {
                     <label>Categorias <small class="text-muted">(separe por vírgula)</small></label>
                     <input type="text" name="category" value="<?= e($editingCategoryDisplay) ?>" placeholder="Ex: motivacional, amor, família">
                     <div class="help-text">Múltiplas categorias separadas por vírgula.</div>
+                </div>
+                <div class="field">
+                    <label>Coleção <small class="text-muted">(tema/conjunto, opcional)</small></label>
+                    <input type="text" name="collection" value="<?= e($editingCollection['name'] ?? '') ?>" placeholder="Ex: Ano Novo 2026" list="collection-suggestions">
+                    <datalist id="collection-suggestions">
+                        <?php foreach ($collectionNames as $c): ?><option value="<?= e($c) ?>"><?php endforeach; ?>
+                    </datalist>
                 </div>
                 <div class="field">
                     <label>Idioma</label>
@@ -72,6 +86,14 @@ if ($editing) {
         <div class="d-flex gap-2" style="flex-wrap:wrap; align-items:center;">
             <form method="get" action="index.php" class="d-flex gap-2" style="flex-wrap:wrap;">
                 <input type="hidden" name="page" value="phrases">
+                <?php if ($collectionNames): ?>
+                <select name="collection" data-autosubmit>
+                    <option value="">Todas as coleções</option>
+                    <?php foreach ($collectionNames as $c): ?>
+                        <option value="<?= e($c) ?>" <?= $filterCollection === $c ? 'selected' : '' ?>><?= e($c) ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <?php endif; ?>
                 <?php if ($categories): ?>
                 <select name="category" data-autosubmit>
                     <option value="">Todas as categorias</option>
@@ -88,7 +110,7 @@ if ($editing) {
                     <?php endforeach; ?>
                 </select>
                 <?php endif; ?>
-                <?php if ($filterCategory !== '' || $filterAuthor !== ''): ?>
+                <?php if ($filterCategory !== '' || $filterAuthor !== '' || $filterCollection !== ''): ?>
                     <a href="index.php?page=phrases" class="btn btn-outline btn-sm">Limpar filtros</a>
                 <?php endif; ?>
             </form>
@@ -99,10 +121,10 @@ if ($editing) {
     </div>
     <div class="card-body flush">
         <table class="data-table">
-            <thead><tr><th>Frase</th><th>Autor</th><th>Categorias</th><th>Idioma</th><th>Tier</th><th></th></tr></thead>
+            <thead><tr><th>Frase</th><th>Autor</th><th>Coleção</th><th>Categorias</th><th>Idioma</th><th>Tier</th><th></th></tr></thead>
             <tbody>
             <?php if (!$rows): ?>
-                <tr class="empty-row"><td colspan="6">Nenhuma frase cadastrada.</td></tr>
+                <tr class="empty-row"><td colspan="7">Nenhuma frase cadastrada.</td></tr>
             <?php endif; ?>
             <?php foreach ($rows as $r): ?>
                 <?php
@@ -111,6 +133,11 @@ if ($editing) {
                 <tr>
                     <td style="max-width:340px;"><?= e(mb_strimwidth($r['phrase'], 0, 120, '…')) ?></td>
                     <td class="text-muted"><?= e($r['author'] ?: '—') ?></td>
+                    <td class="text-muted">
+                        <?php if (!empty($r['collection_name'])): ?>
+                            <span class="badge" style="background:rgba(99,102,241,.1);color:#6366f1;"><?= e($r['collection_name']) ?></span>
+                        <?php else: ?>—<?php endif; ?>
+                    </td>
                     <td class="text-muted">
                         <?php if ($cats): ?>
                             <?php foreach ($cats as $cat): ?>

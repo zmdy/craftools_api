@@ -253,19 +253,33 @@ function albumTemplateRowFromInput(array $d): array {
 // phrases — banco de frases (autor / frase / categoria / idioma)
 // ============================================================================
 
-function phraseList(?string $filterCategory = null, ?string $filterAuthor = null): array {
-    $sql = 'SELECT * FROM phrases WHERE 1=1';
+function phraseList(?string $filterCategory = null, ?string $filterAuthor = null, ?string $filterCollection = null): array {
+    // LEFT JOIN só para trazer o nome da coleção (se houver) junto de cada
+    // frase -- exibido na listagem do painel admin.
+    $sql = "SELECT phrases.*, pc.name AS collection_name
+            FROM phrases
+            LEFT JOIN phrase_collection_links l ON l.phrase_id = phrases.id
+            LEFT JOIN phrase_collections pc ON pc.id = l.collection_id
+            WHERE 1=1";
     $params = [];
     if ($filterCategory !== null && $filterCategory !== '') {
         // category é CSV: "amor,motivacional" — busca categoria exata dentro do vetor
-        $sql .= " AND (',' || category || ',' LIKE ?)";
+        $sql .= " AND (',' || phrases.category || ',' LIKE ?)";
         $params[] = '%,' . $filterCategory . ',%';
     }
     if ($filterAuthor !== null && $filterAuthor !== '') {
-        $sql .= ' AND author = ?';
+        $sql .= ' AND phrases.author = ?';
         $params[] = $filterAuthor;
     }
-    $sql .= ' ORDER BY created_at DESC';
+    if ($filterCollection !== null && $filterCollection !== '') {
+        $sql .= ' AND phrases.id IN (
+            SELECT l2.phrase_id FROM phrase_collection_links l2
+            INNER JOIN phrase_collections pc2 ON pc2.id = l2.collection_id
+            WHERE pc2.name = ? COLLATE NOCASE
+        )';
+        $params[] = $filterCollection;
+    }
+    $sql .= ' GROUP BY phrases.id ORDER BY phrases.created_at DESC';
     $stmt = db()->prepare($sql);
     $stmt->execute($params);
     return $stmt->fetchAll();
@@ -275,7 +289,7 @@ function phraseFind(int $id): ?array {
     return repoFind('phrases', $id);
 }
 
-function phraseListActiveForTier(string $tier, ?string $category = null, ?string $language = null, int $limit = 50): array {
+function phraseListActiveForTier(string $tier, ?string $category = null, ?string $language = null, int $limit = 50, ?string $collection = null): array {
     $sql = 'SELECT * FROM phrases WHERE active = 1';
     $params = [];
     if ($category !== null && $category !== '') {
@@ -286,6 +300,16 @@ function phraseListActiveForTier(string $tier, ?string $category = null, ?string
     if ($language !== null && $language !== '') {
         $sql .= ' AND language = ?';
         $params[] = $language;
+    }
+    if ($collection !== null && $collection !== '') {
+        // Coleção é o filtro de "1º nível" (tema/conjunto); category/author
+        // continuam sendo o filtro de "2º nível", aplicado sobre este resultado.
+        $sql .= ' AND id IN (
+            SELECT l.phrase_id FROM phrase_collection_links l
+            INNER JOIN phrase_collections pc ON pc.id = l.collection_id
+            WHERE pc.name = ? COLLATE NOCASE
+        )';
+        $params[] = $collection;
     }
     $sql .= ' ORDER BY id ASC';
     $stmt = db()->prepare($sql);
@@ -373,6 +397,88 @@ function phraseCategories(): array {
 function phraseAuthors(): array {
     $rows = db()->query("SELECT DISTINCT author FROM phrases WHERE author IS NOT NULL AND author <> '' ORDER BY author")->fetchAll();
     return array_column($rows, 'author');
+}
+
+// ============================================================================
+// phrase_collections / phrase_collection_links — agrupamento de frases por
+// tema/conjunto (ex.: "Ano Novo 2026", "Poemas de Amor"), independente de
+// category/author (que são atributos livres da própria frase).
+// ============================================================================
+
+/** Lista coleções (com contagem de frases vinculadas) -- usado pelo painel admin. */
+function phraseCollectionList(): array {
+    return db()->query(
+        "SELECT pc.*, (SELECT COUNT(*) FROM phrase_collection_links l WHERE l.collection_id = pc.id) AS phrase_count
+         FROM phrase_collections pc
+         ORDER BY pc.sort_order ASC, pc.name ASC"
+    )->fetchAll();
+}
+
+/** Só os nomes das coleções ativas -- usado para popular selects/datalists (admin e API pública). */
+function phraseCollectionNames(): array {
+    $rows = db()->query("SELECT name FROM phrase_collections WHERE active = 1 ORDER BY sort_order ASC, name ASC")->fetchAll();
+    return array_column($rows, 'name');
+}
+
+function phraseCollectionFind(int $id): ?array {
+    return repoFind('phrase_collections', $id);
+}
+
+/** Busca uma coleção pelo nome (case-insensitive). */
+function phraseCollectionFindByName(string $name): ?array {
+    $stmt = db()->prepare('SELECT * FROM phrase_collections WHERE name = ? COLLATE NOCASE LIMIT 1');
+    $stmt->execute([trim($name)]);
+    $row = $stmt->fetch();
+    return $row !== false ? $row : null;
+}
+
+/**
+ * Retorna o id da coleção com este nome, criando-a se ainda não existir.
+ * Usado pelo import CSV e pelo cadastro manual de frases -- o usuário só
+ * "escolhe ou digita" o nome, sem precisar de uma tela de CRUD separada.
+ */
+function phraseCollectionFindOrCreateByName(string $name): ?int {
+    $name = trim($name);
+    if ($name === '') {
+        return null;
+    }
+    $existing = phraseCollectionFindByName($name);
+    if ($existing) {
+        return (int) $existing['id'];
+    }
+    return repoInsert('phrase_collections', [
+        'uuid'       => uuidv4(),
+        'name'       => $name,
+        'sort_order' => 0,
+        'active'     => 1,
+        'created_at' => nowSql(),
+        'updated_at' => nowSql(),
+    ]);
+}
+
+function phraseCollectionDelete(int $id): void {
+    repoDelete('phrase_collections', $id); // ON DELETE CASCADE remove só os vínculos, não as frases
+}
+
+/** Substitui o vínculo de coleção de uma frase (hoje usado como 0..1 coleção por frase). */
+function phraseSetCollection(int $phraseId, ?int $collectionId): void {
+    db()->prepare('DELETE FROM phrase_collection_links WHERE phrase_id = ?')->execute([$phraseId]);
+    if ($collectionId !== null) {
+        db()->prepare('INSERT OR IGNORE INTO phrase_collection_links (phrase_id, collection_id) VALUES (?, ?)')
+            ->execute([$phraseId, $collectionId]);
+    }
+}
+
+/** Retorna a coleção vinculada a uma frase (ou null se nenhuma). */
+function phraseCollectionForPhrase(int $phraseId): ?array {
+    $stmt = db()->prepare(
+        'SELECT pc.* FROM phrase_collections pc
+         INNER JOIN phrase_collection_links l ON l.collection_id = pc.id
+         WHERE l.phrase_id = ? LIMIT 1'
+    );
+    $stmt->execute([$phraseId]);
+    $row = $stmt->fetch();
+    return $row !== false ? $row : null;
 }
 
 // ============================================================================
