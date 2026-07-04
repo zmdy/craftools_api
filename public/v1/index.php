@@ -114,6 +114,7 @@ switch ($resource) {
     //   ?resource=emoji-kitchen&mode=supported
     //   ?resource=emoji-kitchen&mode=partners&emoji=😀
     //   ?resource=emoji-kitchen&mode=combo&left=😀&right=😃
+    //   ?resource=emoji-kitchen&mode=list&emoji=😀&limit=50&offset=0
     case 'emoji-kitchen':
         $mode = isset($_GET['mode']) ? strtolower(trim((string) $_GET['mode'])) : '';
 
@@ -147,7 +148,28 @@ switch ($resource) {
             break;
         }
 
-        v1JsonError(400, 'Parâmetro "mode" inválido. Disponíveis: supported, partners, combo.');
+        if ($mode === 'list') {
+            $emoji = isset($_GET['emoji']) ? (string) $_GET['emoji'] : '';
+            $limit = intInput($_GET, 'limit', 50, 1, 500);
+            $offset = intInput($_GET, 'offset', 0, 0, 10000000);
+            $rows = emojiKitchenList($limit, $offset, $emoji !== '' ? $emoji : null);
+            $data = [
+                'total' => emojiKitchenListCount($emoji !== '' ? $emoji : null),
+                'limit' => $limit,
+                'offset' => $offset,
+                'items' => array_map(static function (array $row): array {
+                    return [
+                        'leftEmoji' => $row['left_emoji'],
+                        'rightEmoji' => $row['right_emoji'],
+                        'imageUrl' => $row['image_url'],
+                        'isLatest' => (bool) $row['is_latest'],
+                    ];
+                }, $rows),
+            ];
+            break;
+        }
+
+        v1JsonError(400, 'Parâmetro "mode" inválido. Disponíveis: supported, partners, combo, list.');
         break;
 }
 

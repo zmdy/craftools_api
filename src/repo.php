@@ -468,6 +468,48 @@ function emojiKitchenCount(): int {
     return (int) ($row['c'] ?? 0);
 }
 
+/**
+ * Lista paginada de combos cadastrados -- usada pelo painel admin (tabela de
+ * navegação) e pela API pública (?resource=emoji-kitchen&mode=list).
+ * $filterEmoji, quando informado, restringe aos combos em que o emoji aparece
+ * de qualquer lado (left_emoji OU right_emoji).
+ */
+function emojiKitchenList(int $limit = 50, int $offset = 0, ?string $filterEmoji = null): array {
+    $limit = max(1, min(500, $limit));
+    $offset = max(0, $offset);
+    $sql = 'SELECT * FROM emoji_kitchen_combos WHERE active = 1';
+    $params = [];
+    if ($filterEmoji !== null && $filterEmoji !== '') {
+        $sql .= ' AND (left_emoji = ? OR right_emoji = ?)';
+        $params[] = $filterEmoji;
+        $params[] = $filterEmoji;
+    }
+    $sql .= ' ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?';
+    $stmt = db()->prepare($sql);
+    foreach ($params as $i => $p) {
+        $stmt->bindValue($i + 1, $p);
+    }
+    $stmt->bindValue(count($params) + 1, $limit, PDO::PARAM_INT);
+    $stmt->bindValue(count($params) + 2, $offset, PDO::PARAM_INT);
+    $stmt->execute();
+    return $stmt->fetchAll();
+}
+
+/** Total de combos que respeitam o mesmo filtro de emojiKitchenList() -- usado para paginação. */
+function emojiKitchenListCount(?string $filterEmoji = null): int {
+    $sql = 'SELECT COUNT(*) AS c FROM emoji_kitchen_combos WHERE active = 1';
+    $params = [];
+    if ($filterEmoji !== null && $filterEmoji !== '') {
+        $sql .= ' AND (left_emoji = ? OR right_emoji = ?)';
+        $params[] = $filterEmoji;
+        $params[] = $filterEmoji;
+    }
+    $stmt = db()->prepare($sql);
+    $stmt->execute($params);
+    $row = $stmt->fetch();
+    return (int) ($row['c'] ?? 0);
+}
+
 // ============================================================================
 // asset_collections / asset_images — overlays e backgrounds
 // ============================================================================

@@ -1,6 +1,13 @@
 <?php
 // Não precisa de checagem adicional: index.php já garante sessão admin
-$currentCount = emojiKitchenCount();
+$currentCount  = emojiKitchenCount();
+$filterEmoji   = trim((string) ($_GET['emoji'] ?? ''));
+$listPage      = max(1, (int) ($_GET['lp'] ?? 1));
+$listPerPage   = 30;
+$listOffset    = ($listPage - 1) * $listPerPage;
+$listRows      = emojiKitchenList($listPerPage, $listOffset, $filterEmoji !== '' ? $filterEmoji : null);
+$listTotal     = emojiKitchenListCount($filterEmoji !== '' ? $filterEmoji : null);
+$listTotalPages = max(1, (int) ceil($listTotal / $listPerPage));
 ?>
 
 <div class="card">
@@ -70,6 +77,48 @@ $currentCount = emojiKitchenCount();
             <div id="ek-error-log" style="margin-top:12px;"></div>
         </div>
     </div>
+</div>
+
+<div class="card">
+    <div class="card-head">
+        <h2>Combos cadastrados (<?= number_format($listTotal, 0, ',', '.') ?>)</h2>
+        <form method="get" action="index.php" class="d-flex gap-2" style="flex-wrap:wrap; align-items:center;">
+            <input type="hidden" name="page" value="emoji_kitchen">
+            <input type="text" name="emoji" value="<?= e($filterEmoji) ?>" placeholder="Filtrar por emoji (ex: 😀)" style="max-width:180px;">
+            <button type="submit" class="btn btn-outline btn-sm">Filtrar</button>
+            <?php if ($filterEmoji !== ''): ?>
+                <a href="index.php?page=emoji_kitchen" class="btn btn-outline btn-sm">Limpar filtro</a>
+            <?php endif; ?>
+        </form>
+    </div>
+    <div class="card-body flush">
+        <table class="data-table">
+            <thead><tr><th></th><th>Emoji 1</th><th>Emoji 2</th><th>Última versão</th></tr></thead>
+            <tbody>
+            <?php if (!$listRows): ?>
+                <tr class="empty-row"><td colspan="4">Nenhum combo cadastrado<?= $filterEmoji !== '' ? ' para este filtro' : '' ?>.</td></tr>
+            <?php endif; ?>
+            <?php foreach ($listRows as $row): ?>
+                <tr>
+                    <td><img src="<?= e($row['image_url']) ?>" alt="" loading="lazy" style="width:40px; height:40px; object-fit:contain;"></td>
+                    <td style="font-size:20px;"><?= e($row['left_emoji']) ?></td>
+                    <td style="font-size:20px;"><?= e($row['right_emoji']) ?></td>
+                    <td class="text-muted"><?= $row['is_latest'] ? 'Sim' : 'Não' ?></td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+    <?php if ($listTotalPages > 1): ?>
+    <div class="card-body d-flex" style="justify-content:center; gap:6px; align-items:center; border-top:1px solid var(--border);">
+        <?php
+            $baseQs = 'page=emoji_kitchen' . ($filterEmoji !== '' ? '&emoji=' . urlencode($filterEmoji) : '');
+        ?>
+        <a href="index.php?<?= $baseQs ?>&lp=<?= max(1, $listPage - 1) ?>" class="btn btn-outline btn-sm" <?= $listPage <= 1 ? 'style="pointer-events:none;opacity:.4;"' : '' ?>>Anterior</a>
+        <span class="text-muted" style="font-size:12.5px;">Página <?= $listPage ?> de <?= $listTotalPages ?></span>
+        <a href="index.php?<?= $baseQs ?>&lp=<?= min($listTotalPages, $listPage + 1) ?>" class="btn btn-outline btn-sm" <?= $listPage >= $listTotalPages ? 'style="pointer-events:none;opacity:.4;"' : '' ?>>Próxima</a>
+    </div>
+    <?php endif; ?>
 </div>
 
 <script src="assets/emoji-kitchen-import.js"></script>
