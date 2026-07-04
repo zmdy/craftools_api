@@ -249,6 +249,11 @@ textarea { resize: vertical; min-height: 76px; font-family: 'DM Mono', monospace
 .img-thumb .img-thumb-actions { position: absolute; inset: 0; background: rgba(0,0,0,.45); opacity: 0; transition: opacity .15s; display: flex; align-items: center; justify-content: center; gap: 6px; }
 .img-thumb:hover .img-thumb-actions { opacity: 1; }
 
+/* Linha de foto + informações (tela "Ver" de um link de upload) -- lista
+   simples em vez de um card estilizado tentando imitar o resultado final. */
+.upload-photo-row { display: flex; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--border); align-items: flex-start; }
+.upload-photo-row:last-child { border-bottom: none; }
+
 /* ---- Responsivo --------------------------------------------------------------- */
 @media (max-width: 880px) {
     .sidenav-panel { position: fixed; left: 0; top: 0; height: 100vh; margin-left: -250px; transition: margin-left .25s; z-index: 60; }

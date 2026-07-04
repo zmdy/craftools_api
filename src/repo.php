@@ -376,6 +376,99 @@ function phraseAuthors(): array {
 }
 
 // ============================================================================
+// emoji_kitchen_combos — combos do Emoji Kitchen (importados do metadata.json
+// de https://github.com/xsalazar/emoji-kitchen via painel admin)
+// ============================================================================
+
+/**
+ * Insere ou atualiza (upsert por par de codepoints) um lote de combos.
+ * Cada item aceito segue o formato do metadata.json original: leftEmoji,
+ * rightEmoji, leftEmojiCodepoint, rightEmojiCodepoint, gStaticUrl, isLatest.
+ * @return int quantos itens do lote foram gravados com sucesso.
+ */
+function emojiKitchenUpsertBatch(array $items): int {
+    $sql = 'INSERT INTO emoji_kitchen_combos
+                (uuid, left_emoji, right_emoji, left_codepoint, right_codepoint, image_url, is_latest, tier, active, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+            ON CONFLICT(left_codepoint, right_codepoint) DO UPDATE SET
+                left_emoji = excluded.left_emoji,
+                right_emoji = excluded.right_emoji,
+                image_url = excluded.image_url,
+                is_latest = excluded.is_latest';
+    $stmt = db()->prepare($sql);
+
+    $count = 0;
+    foreach ($items as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+        $leftEmoji  = trim((string) ($item['leftEmoji'] ?? ''));
+        $rightEmoji = trim((string) ($item['rightEmoji'] ?? ''));
+        $leftCp     = trim((string) ($item['leftEmojiCodepoint'] ?? ''));
+        $rightCp    = trim((string) ($item['rightEmojiCodepoint'] ?? ''));
+        $imageUrl   = trim((string) ($item['gStaticUrl'] ?? $item['imageUrl'] ?? ''));
+        if ($leftEmoji === '' || $rightEmoji === '' || $leftCp === '' || $rightCp === '' || $imageUrl === '') {
+            continue;
+        }
+        $isLatest = array_key_exists('isLatest', $item) ? (empty($item['isLatest']) ? 0 : 1) : 1;
+
+        try {
+            $stmt->execute([uuidv4(), $leftEmoji, $rightEmoji, $leftCp, $rightCp, $imageUrl, $isLatest, 'free', nowSql()]);
+            $count++;
+        } catch (Throwable $e) {
+            // Item malformado isolado não deve derrubar o lote inteiro.
+            continue;
+        }
+    }
+    return $count;
+}
+
+/** Busca o combo (em qualquer ordem esquerda/direita) para um par de emojis. */
+function emojiKitchenFindCombo(string $left, string $right): ?array {
+    $stmt = db()->prepare(
+        'SELECT * FROM emoji_kitchen_combos
+         WHERE active = 1 AND (
+             (left_emoji = ? AND right_emoji = ?) OR (left_emoji = ? AND right_emoji = ?)
+         )
+         ORDER BY is_latest DESC LIMIT 1'
+    );
+    $stmt->execute([$left, $right, $right, $left]);
+    $row = $stmt->fetch();
+    return $row !== false ? $row : null;
+}
+
+/** Emojis que têm ao menos 1 combo real cadastrado com o emoji dado (em qualquer ordem). */
+function emojiKitchenPartners(string $emoji): array {
+    $stmt = db()->prepare(
+        "SELECT DISTINCT right_emoji AS partner FROM emoji_kitchen_combos WHERE active = 1 AND left_emoji = ?
+         UNION
+         SELECT DISTINCT left_emoji AS partner FROM emoji_kitchen_combos WHERE active = 1 AND right_emoji = ?
+         ORDER BY partner ASC"
+    );
+    $stmt->execute([$emoji, $emoji]);
+    return array_column($stmt->fetchAll(), 'partner');
+}
+
+/** Lista (limitada) de emojis com pelo menos 1 combo cadastrado -- usado como "conjunto suportado". */
+function emojiKitchenSupportedList(int $limit = 500): array {
+    $limit = max(1, min(2000, $limit));
+    $stmt = db()->query(
+        "SELECT e FROM (
+            SELECT DISTINCT left_emoji AS e FROM emoji_kitchen_combos WHERE active = 1
+            UNION
+            SELECT DISTINCT right_emoji AS e FROM emoji_kitchen_combos WHERE active = 1
+        ) ORDER BY e ASC LIMIT {$limit}"
+    );
+    return array_column($stmt->fetchAll(), 'e');
+}
+
+/** Total de combos cadastrados -- usado pelo painel admin (feedback do import). */
+function emojiKitchenCount(): int {
+    $row = db()->query('SELECT COUNT(*) AS c FROM emoji_kitchen_combos')->fetch();
+    return (int) ($row['c'] ?? 0);
+}
+
+// ============================================================================
 // asset_collections / asset_images — overlays e backgrounds
 // ============================================================================
 
@@ -438,6 +531,7 @@ function assetCollectionDelete(int $id): void {
 function assetImagesByCollection(int $collectionId): array {
     return repoList('asset_images', 'sort_order ASC, id ASC', ['collection_id' => $collectionId]);
 }
+
 
 function assetImageFind(int $id): ?array {
     return repoFind('asset_images', $id);

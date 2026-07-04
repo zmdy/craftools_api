@@ -147,7 +147,9 @@ try {
                 $result = uploadLinkCreate($clientName, $gridSizeId, $photoCount, $notes, $adminId);
                 auditLog($adminId, 'create', 'upload_links', (string) $result['id']);
                 $_SESSION['flash'] = ['type' => 'success', 'msg' => 'Link criado com sucesso. Copie agora e envie para o cliente.'];
-                $_SESSION['reveal_upload_link'] = uploadLinkFullUrl($result['raw_token']);
+                // Só o token bruto é guardado na sessão (flash, uma leitura só) -- a
+                // view monta a URL completa em JS (admin.js: buildUploadLink()).
+                $_SESSION['reveal_upload_link'] = $result['raw_token'];
                 header('Location: index.php?page=upload_links');
                 exit;
             }
@@ -162,8 +164,14 @@ try {
                 $result = uploadLinkRegenerateToken($id);
                 auditLog($adminId, 'update', 'upload_links', (string) $id, 'token regenerated');
                 $_SESSION['flash'] = ['type' => 'success', 'msg' => 'Novo link gerado. O link anterior parou de funcionar.'];
-                $_SESSION['reveal_upload_link'] = uploadLinkFullUrl($result['raw_token']);
-                header('Location: index.php?page=upload_links');
+                $_SESSION['reveal_upload_link'] = $result['raw_token'];
+                // Volta para a mesma tela de detalhe quando o botão foi clicado
+                // a partir dela (redirect_view), em vez de sempre cair na lista.
+                $redirectView = (string) ($_POST['redirect_view'] ?? '');
+                $location = $redirectView !== ''
+                    ? 'index.php?page=upload_links&view=' . urlencode($redirectView)
+                    : 'index.php?page=upload_links';
+                header('Location: ' . $location);
                 exit;
             }
             if ($action === 'delete') {

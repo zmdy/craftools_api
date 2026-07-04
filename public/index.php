@@ -15,7 +15,7 @@ if (adminCountActive() === 0) {
     exit;
 }
 
-$validPages = ['login', 'logout', 'dashboard', 'users', 'tokens', 'grid_sizes', 'album_templates', 'assets', 'phrases', 'phrases_csv_import', 'bulk_import', 'upload_links'];
+$validPages = ['login', 'logout', 'dashboard', 'users', 'tokens', 'grid_sizes', 'album_templates', 'assets', 'phrases', 'phrases_csv_import', 'bulk_import', 'upload_links', 'emoji_kitchen'];
 $page = (string) ($_GET['page'] ?? 'dashboard');
 if (!in_array($page, $validPages, true)) {
     $page = 'dashboard';

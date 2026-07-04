@@ -1,10 +1,70 @@
 <?php
 /**
  * upload_links.php (view) — cria e gerencia links de upload de fotos para
- * clientes. O valor em texto puro do link fica salvo em `token` (diferente de
- * api_tokens) justamente para poder ser copiado a qualquer momento, não só na
- * criação — ver comentário em database/schema.sql.
+ * clientes. O valor em texto puro do link nunca é salvo (só o hash, como em
+ * api_tokens) — por isso só aparece uma vez, logo após "Gerar link" ou
+ * "Gerar novo link", e a URL em si é montada no navegador
+ * (admin.js: buildUploadLink()), não aqui no PHP.
  */
+
+/** Mostra só as INFORMAÇÕES capturadas de uma foto enviada (texto/fonte/cor da
+ *  legenda, tipo e valor do fundo) — sem tentar remontar visualmente como a
+ *  foto ficaria (isso exigiria compor a imagem final, que não é o que este
+ *  recurso guarda; ele guarda a foto original + os metadados separados). */
+function renderUploadPhotoInfo(string $linkUuid, array $photo, ?array $caption, ?array $background): void {
+    $bg = $background['bg'] ?? null;
+    $overlay = $background['overlay'] ?? null;
+    $swatch = function (string $color): string {
+        return '<span style="display:inline-block;width:11px;height:11px;border-radius:3px;'
+            . 'background:' . e($color) . ';border:1px solid var(--border);vertical-align:middle;margin-right:4px;"></span>';
+    };
+    ?>
+    <div class="upload-photo-row">
+        <div class="img-thumb" style="width:72px;height:72px;flex-shrink:0;">
+            <img src="upload_link_photo.php?uuid=<?= e($linkUuid) ?>&file=<?= e($photo['filename']) ?>"
+                 alt="<?= e($photo['originalName'] ?? '') ?>" loading="lazy">
+        </div>
+        <div style="flex:1;min-width:0;font-size:12.5px;">
+            <?php if ($caption && $caption['text']): ?>
+                <div><strong>Legenda:</strong> "<?= e($caption['text']) ?>"</div>
+                <div class="text-muted" style="margin-top:2px;">
+                    Fonte: <?= e($caption['fontFamily'] ?: '—') ?> ·
+                    Tamanho: <?= e($caption['fontSize'] ?: '—') ?> ·
+                    Cor: <?= $swatch($caption['color'] ?: '#000000') ?><?= e($caption['color'] ?: '—') ?>
+                </div>
+            <?php else: ?>
+                <div class="text-muted">Sem legenda</div>
+            <?php endif; ?>
+
+            <?php if ($bg && !empty($bg['type'])): ?>
+                <div style="margin-top:6px;">
+                    <strong>Fundo:</strong>
+                    <?php if ($bg['type'] === 'color'): ?>
+                        <?= $swatch($bg['value']) ?><?= e($bg['value']) ?>
+                    <?php elseif ($bg['type'] === 'gradient'): ?>
+                        gradiente
+                    <?php elseif ($bg['type'] === 'image'): ?>
+                        imagem — <a href="<?= e($bg['value']) ?>" target="_blank" rel="noopener">ver</a>
+                    <?php endif; ?>
+                </div>
+            <?php else: ?>
+                <div class="text-muted" style="margin-top:6px;">Sem fundo definido</div>
+            <?php endif; ?>
+
+            <?php if ($overlay && !empty($overlay['url'])): ?>
+                <div class="text-muted" style="margin-top:4px;">Overlay: <a href="<?= e($overlay['url']) ?>" target="_blank" rel="noopener">ver</a></div>
+            <?php endif; ?>
+        </div>
+    </div>
+    <?php
+}
+
+// Reveal do link em texto puro -- só existe uma vez, logo após "Gerar link"/
+// "Gerar novo link" (create ou regenerate em actions.php), independente de o
+// admin estar na lista ou já ter ido direto para a tela de detalhe do link.
+$reveal = $_SESSION['reveal_upload_link'] ?? null;
+unset($_SESSION['reveal_upload_link']);
+
 $viewUuid = (string) ($_GET['view'] ?? '');
 $viewLink = $viewUuid !== '' ? uploadLinkFindByUuid($viewUuid) : null;
 
@@ -16,6 +76,22 @@ if ($viewLink) {
     <a href="index.php?page=upload_links" class="btn btn-outline btn-sm" style="margin-bottom:14px;">
         <span class="material-symbols-outlined">arrow_back</span> Voltar para links
     </a>
+
+    <?php if ($reveal): ?>
+    <div class="card">
+        <div class="card-head"><h2>Link pronto</h2></div>
+        <div class="card-body">
+            <p class="help-text" style="margin-bottom:8px;">
+                Copie agora e envie para o cliente: por segurança, este link completo não é salvo em
+                texto puro, então não pode ser reexibido depois — se precisar de novo, use "Gerar novo link".
+            </p>
+            <div class="token-reveal d-flex flex-between">
+                <span id="new-link-value" class="mono" style="word-break:break-all;" data-upload-token="<?= e($reveal) ?>">Carregando link…</span>
+                <button type="button" class="btn btn-sm btn-secondary" data-copy="#new-link-value">Copiar</button>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
 
     <div class="card">
         <div class="card-head">
@@ -31,18 +107,18 @@ if ($viewLink) {
                 <div class="field"><label>Fotos enviadas</label><div><?= count($photoFiles) ?></div></div>
                 <div class="field"><label>Enviado em</label><div><?= e($viewLink['submitted_at'] ?? '—') ?></div></div>
             </div>
-            <?php if (!empty($viewLink['token'])): ?>
-                <div class="field">
-                    <label>Link</label>
-                    <div class="token-reveal d-flex flex-between">
-                        <span id="view-link-url" class="mono" style="word-break:break-all;"><?= e(uploadLinkFullUrl($viewLink['token'])) ?></span>
-                        <button type="button" class="btn btn-sm btn-secondary" data-copy="#view-link-url">Copiar</button>
-                    </div>
-                </div>
-            <?php endif; ?>
             <?php if ($viewLink['notes']): ?>
                 <div class="field"><label>Observações</label><div><?= nl2br(e($viewLink['notes'])) ?></div></div>
             <?php endif; ?>
+            <form method="post" action="index.php?page=upload_links" style="margin-top:10px;" data-confirm="Gerar um novo link para este cliente? O link anterior para de funcionar.">
+                <?= csrfField() ?>
+                <input type="hidden" name="_action" value="regenerate">
+                <input type="hidden" name="id" value="<?= (int) $viewLink['id'] ?>">
+                <input type="hidden" name="redirect_view" value="<?= e($viewLink['uuid']) ?>">
+                <button type="submit" class="btn btn-outline btn-sm">
+                    <span class="material-symbols-outlined" style="font-size:15px;">content_copy</span> Mostrar/gerar link de envio
+                </button>
+            </form>
         </div>
     </div>
 
@@ -50,24 +126,14 @@ if ($viewLink) {
     <div class="card">
         <div class="card-head"><h2>Fotos enviadas (<?= count($photoFiles) ?>)</h2></div>
         <div class="card-body">
-            <div class="img-grid">
-                <?php foreach ($photoFiles as $p): ?>
-                    <?php $capIdx = (string) ($p['index'] ?? ''); $cap = $submission['captions'][$capIdx] ?? null; ?>
-                    <div class="img-thumb">
-                        <img src="upload_link_photo.php?uuid=<?= e($viewLink['uuid']) ?>&file=<?= e($p['filename']) ?>"
-                             alt="<?= e($p['originalName'] ?? '') ?>" loading="lazy">
-                        <div class="img-thumb-actions">
-                            <a href="upload_link_photo.php?uuid=<?= e($viewLink['uuid']) ?>&file=<?= e($p['filename']) ?>&download=1"
-                               class="btn btn-secondary btn-sm btn-icon" title="Baixar" download>
-                                <span class="material-symbols-outlined" style="font-size:16px;">download</span>
-                            </a>
-                        </div>
-                        <?php if ($cap && $cap['text']): ?>
-                            <div class="text-muted" style="font-size:11px;padding:4px 2px;">"<?= e($cap['text']) ?>"</div>
-                        <?php endif; ?>
-                    </div>
-                <?php endforeach; ?>
-            </div>
+            <?php foreach ($photoFiles as $p): ?>
+                <?php
+                $capIdx = (string) ($p['index'] ?? '');
+                $cap = $submission['captions'][$capIdx] ?? null;
+                $bgData = $submission['backgrounds'][$capIdx] ?? null;
+                renderUploadPhotoInfo($viewLink['uuid'], $p, $cap, $bgData);
+                ?>
+            <?php endforeach; ?>
         </div>
     </div>
     <?php elseif ($viewLink['status'] !== 'submitted'): ?>
@@ -78,22 +144,20 @@ if ($viewLink) {
     <?php
 } else {
     // ------------------------------------------------------------- lista/criação
-    $reveal = $_SESSION['reveal_upload_link'] ?? null;
-    unset($_SESSION['reveal_upload_link']);
     $links = uploadLinkList();
     $kits = gridSizeList();
     ?>
 
     <?php if ($reveal): ?>
     <div class="card">
-        <div class="card-head"><h2>Link criado</h2></div>
+        <div class="card-head"><h2>Link pronto</h2></div>
         <div class="card-body">
             <p class="help-text" style="margin-bottom:8px;">
-                Copie e envie para o cliente (o link também pode ser copiado depois, a qualquer momento,
-                pela lista abaixo).
+                Copie agora e envie para o cliente: por segurança, este link completo não é salvo em
+                texto puro, então não pode ser reexibido depois — se precisar de novo, use "Gerar novo link".
             </p>
             <div class="token-reveal d-flex flex-between">
-                <span id="new-link-value" class="mono" style="word-break:break-all;"><?= e($reveal) ?></span>
+                <span id="new-link-value" class="mono" style="word-break:break-all;" data-upload-token="<?= e($reveal) ?>">Carregando link…</span>
                 <button type="button" class="btn btn-sm btn-secondary" data-copy="#new-link-value">Copiar</button>
             </div>
         </div>
@@ -161,21 +225,14 @@ if ($viewLink) {
                         <td class="text-muted" style="font-size:12px;"><?= e($l['created_at']) ?></td>
                         <td class="actions">
                             <a href="index.php?page=upload_links&view=<?= e($l['uuid']) ?>" class="btn btn-secondary btn-sm">Ver</a>
-                            <?php if (!empty($l['token'])): ?>
-                                <input type="text" id="link-url-<?= (int) $l['id'] ?>" value="<?= e(uploadLinkFullUrl($l['token'])) ?>" hidden>
-                                <button type="button" class="btn btn-outline btn-sm" data-copy="#link-url-<?= (int) $l['id'] ?>">
-                                    <span class="material-symbols-outlined" style="font-size:15px;">content_copy</span> Copiar link
+                            <form method="post" action="index.php?page=upload_links" style="display:inline;" data-confirm="Gerar um novo link para este cliente? O link anterior para de funcionar.">
+                                <?= csrfField() ?>
+                                <input type="hidden" name="_action" value="regenerate">
+                                <input type="hidden" name="id" value="<?= (int) $l['id'] ?>">
+                                <button type="submit" class="btn btn-outline btn-sm">
+                                    <span class="material-symbols-outlined" style="font-size:15px;">content_copy</span> Gerar novo link
                                 </button>
-                            <?php else: ?>
-                                <!-- Link criado antes desta coluna existir -- o valor em texto puro nunca
-                                     foi salvo (só o hash), então não dá para reconstruir; só regenerar. -->
-                                <form method="post" action="index.php?page=upload_links" style="display:inline;" data-confirm="Gerar um novo link para este cliente? O link antigo para de funcionar.">
-                                    <?= csrfField() ?>
-                                    <input type="hidden" name="_action" value="regenerate">
-                                    <input type="hidden" name="id" value="<?= (int) $l['id'] ?>">
-                                    <button type="submit" class="btn btn-outline btn-sm">Gerar novo link</button>
-                                </form>
-                            <?php endif; ?>
+                            </form>
                             <?php if ($l['status'] === 'submitted'): ?>
                             <form method="post" action="index.php?page=upload_links" style="display:inline;" data-confirm="Reabrir este link para o cliente enviar de novo?">
                                 <?= csrfField() ?>

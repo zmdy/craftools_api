@@ -504,6 +504,15 @@
         }
         .prop-danger:hover { background: rgba(239,68,68,.08); }
         .prop-danger .material-symbols-outlined { font-size: 15px; }
+        .prop-primary {
+            width: 100%; padding: 9px; border-radius: 8px;
+            border: 1px solid var(--accent); background: var(--accent); color: white;
+            font-size: 13px; font-family: 'DM Sans', sans-serif; font-weight: 600; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; gap: 5px; transition: all 0.12s;
+            margin-bottom: 8px;
+        }
+        .prop-primary:hover { opacity: 0.9; }
+        .prop-primary .material-symbols-outlined { font-size: 15px; }
 
         /* Adjust sliders */
         .adjust-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
@@ -729,7 +738,7 @@
             </button>
             <button class="footer-tool-btn" id="footer-titulo-btn">
                 <span class="material-symbols-outlined">title</span>
-                Título
+                Legenda
             </button>
             <button class="footer-tool-btn" id="footer-ajuste-btn">
                 <span class="material-symbols-outlined">tune</span>
@@ -782,6 +791,7 @@ import { HistoryManager }    from '/craftools/craftools/utils/HistoryManager.js'
 import { TextTool }          from '/craftools/craftools/tools/text/TextTool.js';
 import { CellBackground }    from '/craftools/craftools/tools/album/CellBackground.js';
 import { CellPanel }         from '/craftools/craftools/tools/album/CellPanel.js';
+import { PhotoUploaderState } from '/craftools/craftools/utils/PhotoUploaderState.js';
 // Registra as traduções "pageTool.*" (Fundo/Cor/Gradiente) usadas pelo CellPanel —
 // normalmente carregadas de graça quando PageTool.js é importado, mas essa página
 // não usa PageTool, então precisamos importar o arquivo de traduções na mão.
@@ -808,14 +818,12 @@ const gridSizes = (window.UPLOAD_LINK && window.UPLOAD_LINK.gridSize)
 
 // ── State ─────────────────────────────────────────────────────────────────────
 const photos = [];          // {url, name, width, height}
-let focusedIndex   = -1;        // photo index of focused item
 let galleryIndex   = 0;         // current center slide in gallery
 let lastTemplate   = null;
-let adjustState    = {};        // photoIndex → {brightness, contrast, saturation}
-let photoTransforms   = {};     // photoIndex → {posX, posY, zoom, rotation}
-let photoAjusteActive = {};     // photoIndex → bool  (pan/zoom gestures enabled)
-let captionEditingEl  = null;   // craftools-element currently open in caption sheet
-let photoBackground   = {};     // photoIndex → { bg:{type,value,position,size}, overlay:{...}, border:{...} } — see CellBackground.js
+// state.focusedIndex/state.captionEditingEl/state.photoBackground/state.adjustState/state.photoTransforms/
+// state.photoAjusteActive/state.bgStateObserver now live on `state` (see utils/PhotoUploaderState.js
+// for field docs) instead of as separate loose module variables.
+const state = new PhotoUploaderState();
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const steps = {
@@ -1107,7 +1115,7 @@ async function generateLayout() {
 
     // Clear only grid cells; keep caption craftools-elements
     board.querySelectorAll('.craftools-grid-cell').forEach(el => el.remove());
-    focusedIndex = -1;
+    state.focusedIndex = -1;
     setFooterMode('default');
     HistoryManager.clear();
 
@@ -1266,7 +1274,7 @@ function buildGallery() {
             caption.addEventListener('click', e => {
                 e.stopPropagation();
                 // Ensure this photo is focused and footer is in photo mode
-                if (focusedIndex !== idx) {
+                if (state.focusedIndex !== idx) {
                     galleryIndex = groupIdx;
                     updateGalleryActive(groupIdx);
                     focusPhoto(slide, idx);
@@ -1277,7 +1285,7 @@ function buildGallery() {
 
             slide.addEventListener('click', () => {
                 if (groupIdx === galleryIndex) {
-                    if (focusedIndex === idx) defocusPhoto();
+                    if (state.focusedIndex === idx) defocusPhoto();
                     else focusPhoto(slide, idx);
                 } else {
                     scrollGalleryTo(groupIdx);
@@ -1388,7 +1396,7 @@ function buildStripSlot(photoIdx, groupIndices, slotPos, groupIdx, slideEl) {
     slot.addEventListener('click', e => {
         e.stopPropagation();
         if (groupIdx !== galleryIndex) scrollGalleryTo(groupIdx);
-        if (focusedIndex === photoIdx) defocusPhoto();
+        if (state.focusedIndex === photoIdx) defocusPhoto();
         else focusPhoto(slideEl, photoIdx);
     });
 
@@ -1403,18 +1411,18 @@ function swapPhotos(i, j) {
 
     [photos[i], photos[j]] = [photos[j], photos[i]];
 
-    const tmpAdj = adjustState[i]; adjustState[i] = adjustState[j]; adjustState[j] = tmpAdj;
-    const tmpT   = photoTransforms[i]; photoTransforms[i] = photoTransforms[j]; photoTransforms[j] = tmpT;
-    const tmpA   = photoAjusteActive[i]; photoAjusteActive[i] = photoAjusteActive[j]; photoAjusteActive[j] = tmpA;
-    const tmpBg  = photoBackground[i]; photoBackground[i] = photoBackground[j]; photoBackground[j] = tmpBg;
+    const tmpAdj = state.adjustState[i]; state.adjustState[i] = state.adjustState[j]; state.adjustState[j] = tmpAdj;
+    const tmpT   = state.photoTransforms[i]; state.photoTransforms[i] = state.photoTransforms[j]; state.photoTransforms[j] = tmpT;
+    const tmpA   = state.photoAjusteActive[i]; state.photoAjusteActive[i] = state.photoAjusteActive[j]; state.photoAjusteActive[j] = tmpA;
+    const tmpBg  = state.photoBackground[i]; state.photoBackground[i] = state.photoBackground[j]; state.photoBackground[j] = tmpBg;
 
     const elI = board.querySelector(`craftools-element[data-caption-for="${i}"]`);
     const elJ = board.querySelector(`craftools-element[data-caption-for="${j}"]`);
     if (elI) elI.setAttribute('data-caption-for', String(j));
     if (elJ) elJ.setAttribute('data-caption-for', String(i));
 
-    if (focusedIndex === i) focusedIndex = j;
-    else if (focusedIndex === j) focusedIndex = i;
+    if (state.focusedIndex === i) state.focusedIndex = j;
+    else if (state.focusedIndex === j) state.focusedIndex = i;
 }
 
 function moveSlotPhoto(photoIdx, neighborPhotoIdx, groupIdx) {
@@ -1423,7 +1431,7 @@ function moveSlotPhoto(photoIdx, neighborPhotoIdx, groupIdx) {
     try { HistoryManager.snapshot(board); } catch {}
     updateUndoBtn();
 
-    const wasFocused = focusedIndex;
+    const wasFocused = state.focusedIndex;
     buildGallery();
     scrollGalleryTo(groupIdx);
     if (wasFocused >= 0) {
@@ -1437,7 +1445,7 @@ function moveSlotPhoto(photoIdx, neighborPhotoIdx, groupIdx) {
 // (only meaningful inside photostrip slides, which hold several photos each).
 function updateStripFocusHighlight() {
     galleryTrack.querySelectorAll('.gallery-strip-slot').forEach(s => {
-        s.classList.toggle('focused', +s.dataset.photoIdx === focusedIndex);
+        s.classList.toggle('focused', +s.dataset.photoIdx === state.focusedIndex);
     });
 }
 
@@ -1496,7 +1504,18 @@ galleryNext.addEventListener('click', () => {
 
 // ── Photo focus ───────────────────────────────────────────────────────────────
 function focusPhoto(el, idx) {
-    focusedIndex = idx;
+    // Switching to a DIFFERENT photo — release whatever Legenda/Fundo panel and
+    // background observer were still bound to the PREVIOUSLY focused photo first.
+    // Without this, tapping a new photo directly in the gallery (as opposed to
+    // going through a footer button, which already did this cleanup) left an open
+    // panel visually in place but still wired to the OLD photo's element/cellEl —
+    // so edits made after switching silently landed on the wrong photo.
+    if (state.focusedIndex !== idx) {
+        deselectCaptionIfAny();
+        disconnectBgObserver();
+        closeSheet();
+    }
+    state.focusedIndex = idx;
     // Photostrip slots have no visible caption area of their own, so the
     // "Título" tool is hidden while a strip photo is focused.
     footerTituloBtn.style.display = isStripTemplate(lastTemplate) ? 'none' : '';
@@ -1506,11 +1525,11 @@ function focusPhoto(el, idx) {
 
 function defocusPhoto() {
     // Disable pan/zoom for previously focused photo
-    if (focusedIndex >= 0) {
-        photoAjusteActive[focusedIndex] = false;
-        enableAjusteCursors(focusedIndex, false);
+    if (state.focusedIndex >= 0) {
+        state.photoAjusteActive[state.focusedIndex] = false;
+        enableAjusteCursors(state.focusedIndex, false);
     }
-    focusedIndex = -1;
+    state.focusedIndex = -1;
     setFooterMode('default');
     closeSheet();
     document.querySelectorAll('craftools-element').forEach(el => el.deselect?.());
@@ -1524,9 +1543,9 @@ footerDeselectBtn.addEventListener('click', defocusPhoto);
 // left-behind caption later (e.g. from a background click) would reopen the old
 // Legenda panel on top of whatever tool the user actually switched to.
 function deselectCaptionIfAny() {
-    if (captionEditingEl) {
-        const el = captionEditingEl;
-        captionEditingEl = null;
+    if (state.captionEditingEl) {
+        const el = state.captionEditingEl;
+        state.captionEditingEl = null;
         el.deselect?.();
     }
 }
@@ -1534,7 +1553,7 @@ function deselectCaptionIfAny() {
 // Stop watching whichever cell the Fundo panel had open, if any, before switching
 // to a different footer tool.
 function disconnectBgObserver() {
-    if (bgStateObserver) { bgStateObserver.disconnect(); bgStateObserver = null; }
+    if (state.bgStateObserver) { state.bgStateObserver.disconnect(); state.bgStateObserver = null; }
 }
 
 // Click on gallery background → deselect
@@ -1556,9 +1575,9 @@ footerShuffleBtn.addEventListener('click', () => generateLayout());
 
 // Título: open caption editor for the focused photo
 footerTituloBtn.addEventListener('click', () => {
-    if (focusedIndex < 0) return;
+    if (state.focusedIndex < 0) return;
     disconnectBgObserver();
-    openCaptionEditor(focusedIndex);
+    openCaptionEditor(state.focusedIndex);
 });
 
 // openCaptionEditor: find or create the craftools-element for a photo's caption, then open sheet
@@ -1585,7 +1604,7 @@ function openCaptionEditor(idx) {
         updateUndoBtn();
         notify('Legenda adicionada');
     }
-    captionEditingEl = el;
+    state.captionEditingEl = el;
     el.select?.();
     openSheet('Legenda', buildTituloProps(el));
     syncGalleryCaptions();
@@ -1593,28 +1612,28 @@ function openCaptionEditor(idx) {
 
 // Ajuste: open brightness/contrast/saturation + transform panel for focused photo
 footerAjusteBtn.addEventListener('click', () => {
-    if (focusedIndex < 0) return;
+    if (state.focusedIndex < 0) return;
     deselectCaptionIfAny();
     disconnectBgObserver();
-    openSheet('Ajuste de foto', buildAjusteProps(focusedIndex));
+    openSheet('Ajuste de foto', buildAjusteProps(state.focusedIndex));
 });
 
 // Fundo: open background/gradient/API picker for the focused photo. Reuses the
 // same CellBackground/CellPanel/ApiPicker system the main Album editor uses for
 // grid-cell backgrounds — nothing photo_uploader-specific was built for this.
 footerBgBtn.addEventListener('click', () => {
-    if (focusedIndex < 0) return;
+    if (state.focusedIndex < 0) return;
     deselectCaptionIfAny();
-    openBackgroundEditor(focusedIndex);
+    openBackgroundEditor(state.focusedIndex);
 });
 
 // Substituir: replace the focused photo's image file — works the same whether
 // it's a standalone photo or one photo inside a strip.
 footerReplaceBtn.addEventListener('click', () => {
-    if (focusedIndex < 0) return;
+    if (state.focusedIndex < 0) return;
     deselectCaptionIfAny();
     disconnectBgObserver();
-    triggerPhotoReplace(focusedIndex);
+    triggerPhotoReplace(state.focusedIndex);
 });
 
 // Resolve the DOM "cell" CellBackground should operate on for a given photo index.
@@ -1629,8 +1648,6 @@ function getPhotoCellEl(idx) {
     return imgArea ? imgArea.closest('.gallery-slide') : null;
 }
 
-let bgStateObserver = null; // watches the currently-open Fundo panel's cell for changes
-
 function openBackgroundEditor(idx) {
     const cellEl = getPhotoCellEl(idx);
     if (!cellEl) return;
@@ -1644,10 +1661,10 @@ function openBackgroundEditor(idx) {
     // only invoke the onChange callback above on "Remover fundo/overlay" — dragging
     // a color/gradient slider never calls it. Watch the cell's own attributes
     // instead so every change (including live drags) gets mirrored into
-    // photoBackground[idx], not just explicit clears.
-    if (bgStateObserver) bgStateObserver.disconnect();
-    bgStateObserver = new MutationObserver(save);
-    bgStateObserver.observe(cellEl, {
+    // state.photoBackground[idx], not just explicit clears.
+    if (state.bgStateObserver) state.bgStateObserver.disconnect();
+    state.bgStateObserver = new MutationObserver(save);
+    state.bgStateObserver.observe(cellEl, {
         attributes: true,
         attributeFilter: [
             'data-bg-type', 'data-bg-value', 'data-bg-position', 'data-bg-size',
@@ -1660,10 +1677,10 @@ function openBackgroundEditor(idx) {
 // CellBackground persists color/gradient/image state as dataset attrs directly on
 // the DOM node — but buildGallery() throws that node away and rebuilds from scratch
 // on every resize / "Reembaralhar" / strip reposition swap. Mirror the state into JS
-// (like adjustState/photoTransforms already do) so it survives rebuilds.
+// (like state.adjustState/state.photoTransforms already do) so it survives rebuilds.
 function savePhotoBackgroundState(idx, cellEl) {
     const state = CellBackground.getState(cellEl);
-    photoBackground[idx] = {
+    state.photoBackground[idx] = {
         bg: state.bg,
         overlay: state.overlay,
         border: {
@@ -1677,7 +1694,7 @@ function savePhotoBackgroundState(idx, cellEl) {
 
 // Re-apply a photo's saved background/overlay/border onto its freshly (re)built cell.
 function restorePhotoBackgroundState(idx, cellEl) {
-    const saved = photoBackground[idx];
+    const saved = state.photoBackground[idx];
     if (!saved) return;
     if (saved.bg && saved.bg.type) CellBackground.applyBackground(cellEl, { ...saved.bg, _silent: true });
     if (saved.overlay && saved.overlay.url) CellBackground.applyOverlay(cellEl, { ...saved.overlay, _silent: true });
@@ -1694,14 +1711,30 @@ document.addEventListener('craftools-element-select', e => {
     const el   = e.detail.element;
     const tool = el.getAttribute('data-craftool');
     if (tool === 'titulo' || tool === 'paragrafo') {
-        captionEditingEl = el;
+        state.captionEditingEl = el;
         openSheet('Legenda', buildTituloProps(el));
     }
 });
-document.addEventListener('craftools-element-deselect', () => {
-    // If we're editing a caption, re-select the element instead of closing the sheet
-    if (captionEditingEl) {
-        requestAnimationFrame(() => captionEditingEl.select?.());
+document.addEventListener('craftools-element-deselect', e => {
+    // If we're editing a caption, re-select the element instead of closing the sheet --
+    // but ONLY when the element that just deselected IS the one we're editing.
+    // select() on a NEW craftools-element deselects every other element on the
+    // page first (see Element.js) -- that fires this same event for the OLD
+    // element right as state.captionEditingEl is already pointing at the NEW one, so
+    // without this check we'd reselect the wrong (old/first) element on the next
+    // frame, silently rebuilding the properties panel under the user's fingers
+    // (looked like "always edits the first photo" / the caption field "freezing").
+    // The stable local copy + re-check below also guards against state.captionEditingEl
+    // having gone null by the time the deferred frame runs (e.g. sheet closed
+    // meanwhile), which used to throw "Cannot read properties of null (reading
+    // 'select')".
+    if (state.captionEditingEl) {
+        if (e.detail.element === state.captionEditingEl) {
+            const stillEditing = state.captionEditingEl;
+            requestAnimationFrame(() => {
+                if (state.captionEditingEl === stillEditing) stillEditing.select?.();
+            });
+        }
         return;
     }
     closeSheet();
@@ -1726,14 +1759,14 @@ function openSheet(title, content) {
     sheetOverlay.classList.add('visible');
 }
 function closeSheet() {
-    captionEditingEl = null;
+    state.captionEditingEl = null;
     bottomSheet.classList.remove('open');
     sheetOverlay.classList.remove('visible');
-    if (bgStateObserver) { bgStateObserver.disconnect(); bgStateObserver = null; }
+    if (state.bgStateObserver) { state.bgStateObserver.disconnect(); state.bgStateObserver = null; }
     // Disable pan/zoom gestures when sheet closes
-    if (focusedIndex >= 0 && photoAjusteActive[focusedIndex]) {
-        photoAjusteActive[focusedIndex] = false;
-        enableAjusteCursors(focusedIndex, false);
+    if (state.focusedIndex >= 0 && state.photoAjusteActive[state.focusedIndex]) {
+        state.photoAjusteActive[state.focusedIndex] = false;
+        enableAjusteCursors(state.focusedIndex, false);
     }
 }
 bsCloseBtn.addEventListener('click', () => {
@@ -1806,6 +1839,7 @@ function buildTituloProps(element) {
             </div>
         </div>
         <div class="prop-group">
+            <button class="prop-primary" id="pp-save"><span class="material-symbols-outlined">check</span>Salvar</button>
             <button class="prop-danger" id="pp-del"><span class="material-symbols-outlined">delete</span>Excluir título</button>
         </div>`;
 
@@ -1850,6 +1884,11 @@ function buildTituloProps(element) {
         this.classList.add('active');
         notifyChange();
     }));
+    wrap.querySelector('#pp-save').addEventListener('click', () => {
+        notifyChange();
+        closeSheet();
+        document.querySelectorAll('craftools-element').forEach(el => el.deselect?.());
+    });
     wrap.querySelector('#pp-del').addEventListener('click', () => {
         element.remove(); closeSheet();
         try { HistoryManager.snapshot(board); } catch {}
@@ -1861,12 +1900,12 @@ function buildTituloProps(element) {
 
 // ── Photo style helpers (filter + transform, mirrors ImageTransform.js pattern) ─
 function getAdjust(idx) {
-    if (!adjustState[idx]) adjustState[idx] = { brightness: 100, contrast: 100, saturation: 100 };
-    return adjustState[idx];
+    if (!state.adjustState[idx]) state.adjustState[idx] = { brightness: 100, contrast: 100, saturation: 100 };
+    return state.adjustState[idx];
 }
 function getTransform(idx) {
-    if (!photoTransforms[idx]) photoTransforms[idx] = { posX: 0, posY: 0, zoom: 1, rotation: 0 };
-    return photoTransforms[idx];
+    if (!state.photoTransforms[idx]) state.photoTransforms[idx] = { posX: 0, posY: 0, zoom: 1, rotation: 0 };
+    return state.photoTransforms[idx];
 }
 // Apply filter + transform to a single <img> element
 function applyPhotoStyle(imgEl, idx) {
@@ -1908,7 +1947,7 @@ function attachPhotoPanZoom(container, idx) {
     container.style.cursor = '';
 
     container.addEventListener('pointerdown', e => {
-        if (!photoAjusteActive[idx]) return;
+        if (!state.photoAjusteActive[idx]) return;
         drag.on = true;
         drag.startX = e.clientX; drag.startY = e.clientY;
         const t = getTransform(idx);
@@ -1930,7 +1969,7 @@ function attachPhotoPanZoom(container, idx) {
     const endDrag = e => {
         if (!drag.on) return;
         drag.on = false;
-        container.style.cursor = photoAjusteActive[idx] ? 'move' : '';
+        container.style.cursor = state.photoAjusteActive[idx] ? 'move' : '';
         if (e) try { container.releasePointerCapture(e.pointerId); } catch {}
     };
     container.addEventListener('pointerup', endDrag);
@@ -1938,7 +1977,7 @@ function attachPhotoPanZoom(container, idx) {
 
     // Scroll = zoom / Ctrl+Scroll = rotation (same as ImageTransform.js)
     container.addEventListener('wheel', e => {
-        if (!photoAjusteActive[idx]) return;
+        if (!state.photoAjusteActive[idx]) return;
         e.preventDefault(); e.stopPropagation();
         const t = getTransform(idx);
         if (e.ctrlKey || e.metaKey) {
@@ -1958,7 +1997,7 @@ function buildAjusteProps(idx) {
     const wrap = document.createElement('div');
 
     // Enable pan/zoom gestures while this panel is open
-    photoAjusteActive[idx] = true;
+    state.photoAjusteActive[idx] = true;
     enableAjusteCursors(idx, true);
 
     // ── Helper: slider row ────────────────────────────────────────────────
@@ -2036,8 +2075,8 @@ function buildAjusteProps(idx) {
     resetBtn.className = 'adjust-reset-btn';
     resetBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size:15px;">restart_alt</span>Restaurar padrão';
     resetBtn.addEventListener('click', () => {
-        adjustState[idx]    = { brightness: 100, contrast: 100, saturation: 100 };
-        photoTransforms[idx] = { posX: 0, posY: 0, zoom: 1, rotation: 0 };
+        state.adjustState[idx]    = { brightness: 100, contrast: 100, saturation: 100 };
+        state.photoTransforms[idx] = { posX: 0, posY: 0, zoom: 1, rotation: 0 };
         applyPhotoToAll(idx);
         openSheet('Ajuste de foto', buildAjusteProps(idx));
     });
@@ -2074,8 +2113,8 @@ function notify(msg) {
 // ── Upload-link "Salvar" (submits photos + layout to craftools_api) ───────────
 // Only active when this page was opened through a client upload link (see the
 // UPLOAD_LINK_DATA_MARKER near the top of <head>). Reuses the state the rest of
-// the editor already tracks in memory — photos/captions/photoBackground/
-// adjustState/photoTransforms — nothing new was built just to track this data.
+// the editor already tracks in memory — photos/captions/state.photoBackground/
+// state.adjustState/state.photoTransforms — nothing new was built just to track this data.
 if (window.UPLOAD_LINK && window.UPLOAD_LINK.saveUrl) {
     const footerSaveBtn = document.getElementById('footer-save-btn');
     if (footerSaveBtn) footerSaveBtn.hidden = false;
@@ -2118,9 +2157,9 @@ if (window.UPLOAD_LINK && window.UPLOAD_LINK.saveUrl) {
                 clientName: window.UPLOAD_LINK.clientName,
                 gridSizeName: window.UPLOAD_LINK.gridSize?.name || '',
                 captions: collectCaptions(),
-                backgrounds: photoBackground,
-                adjust: adjustState,
-                transforms: photoTransforms,
+                backgrounds: state.photoBackground,
+                adjust: state.adjustState,
+                transforms: state.photoTransforms,
                 photos: [],
             };
             // photo.url is a data: URL (FileReader.readAsDataURL) — fetch() can read

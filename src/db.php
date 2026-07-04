@@ -32,9 +32,41 @@ function db(): PDO {
         $schema = file_get_contents(CRAFTOOLS_API_ROOT . '/database/schema.sql');
         $pdo->exec($schema);
         @chmod($dbPath, 0660);
+    } else {
+        // Bancos já existentes (criados antes de uma tabela nova ser
+        // adicionada ao schema.sql) não re-executam o schema inteiro -- só
+        // tabelas/índices novos são garantidos aqui, via CREATE ... IF NOT
+        // EXISTS (idempotente e barato, seguro de rodar em toda requisição).
+        ensureAdditiveSchema($pdo);
     }
 
     return $pdo;
+}
+
+/**
+ * Garante que tabelas adicionadas ao schema DEPOIS do banco já existir
+ * também sejam criadas, sem precisar de uma migration formal. Só use
+ * CREATE TABLE/INDEX IF NOT EXISTS aqui -- nunca ALTER/DROP.
+ */
+function ensureAdditiveSchema(PDO $pdo): void {
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS emoji_kitchen_combos (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            uuid            TEXT NOT NULL UNIQUE,
+            left_emoji      TEXT NOT NULL,
+            right_emoji     TEXT NOT NULL,
+            left_codepoint  TEXT NOT NULL,
+            right_codepoint TEXT NOT NULL,
+            image_url       TEXT NOT NULL,
+            is_latest       INTEGER NOT NULL DEFAULT 1 CHECK (is_latest IN (0,1)),
+            tier            TEXT NOT NULL DEFAULT 'free' CHECK (tier IN ('free','plus','premium')),
+            active          INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0,1)),
+            created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_emoji_kitchen_pair ON emoji_kitchen_combos(left_codepoint, right_codepoint);
+        CREATE INDEX IF NOT EXISTS idx_emoji_kitchen_left ON emoji_kitchen_combos(left_codepoint);
+        CREATE INDEX IF NOT EXISTS idx_emoji_kitchen_right ON emoji_kitchen_combos(right_codepoint);
+    ");
 }
 
 /** Gera um UUID v4 (usado como identificador público de todas as entidades). */

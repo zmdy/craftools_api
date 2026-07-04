@@ -94,6 +94,22 @@
         });
     }
 
+    // Monta a URL de um link de upload (public/upload?token=...) a partir so
+    // do token -- a base (origem + pasta public/) e sempre a mesma pagina onde
+    // o painel esta rodando, entao nao precisa que o PHP monte isso com
+    // $_SERVER (mais fragil entre ambientes); o JS ja sabe a propria URL.
+    function buildUploadLink(token) {
+        var base = location.pathname.replace(/index\.php.*$/, '');
+        return location.origin + base + 'upload?token=' + token;
+    }
+
+    function initUploadLinkReveal() {
+        document.querySelectorAll('[data-upload-token]').forEach(function (el) {
+            var token = el.getAttribute('data-upload-token');
+            if (token) el.textContent = buildUploadLink(token);
+        });
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
         initTheme();
         initSidenavToggle();
@@ -101,6 +117,7 @@
         initFlashAutoHide();
         initCopyButtons();
         initAutoSubmitSelects();
+        initUploadLinkReveal();
         var themeBtn = document.getElementById('theme-toggle');
         if (themeBtn) themeBtn.addEventListener('click', toggleTheme);
     });

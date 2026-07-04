@@ -158,6 +158,29 @@ CREATE TABLE IF NOT EXISTS phrases (
 );
 CREATE INDEX IF NOT EXISTS idx_phrases_lang_cat ON phrases(language, category);
 
+-- ── Combos do Emoji Kitchen (importados do metadata.json de
+-- https://github.com/xsalazar/emoji-kitchen via painel admin) ───────────────
+-- As imagens NÃO são baixadas/hospedadas -- image_url guarda a URL pública do
+-- Google (gstatic) direto do metadata.json, servida via hotlink (mesma
+-- estratégia do site original emojikitchen.dev). left/right_codepoint são o
+-- par que identifica a combinação de forma única (índice único abaixo).
+CREATE TABLE IF NOT EXISTS emoji_kitchen_combos (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    uuid            TEXT NOT NULL UNIQUE,
+    left_emoji      TEXT NOT NULL,
+    right_emoji     TEXT NOT NULL,
+    left_codepoint  TEXT NOT NULL,
+    right_codepoint TEXT NOT NULL,
+    image_url       TEXT NOT NULL,
+    is_latest       INTEGER NOT NULL DEFAULT 1 CHECK (is_latest IN (0,1)),
+    tier            TEXT NOT NULL DEFAULT 'free' CHECK (tier IN ('free','plus','premium')),
+    active          INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0,1)),
+    created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_emoji_kitchen_pair ON emoji_kitchen_combos(left_codepoint, right_codepoint);
+CREATE INDEX IF NOT EXISTS idx_emoji_kitchen_left ON emoji_kitchen_combos(left_codepoint);
+CREATE INDEX IF NOT EXISTS idx_emoji_kitchen_right ON emoji_kitchen_combos(right_codepoint);
+
 -- ── Log de auditoria das ações administrativas ───────────────────────────────
 CREATE TABLE IF NOT EXISTS audit_log (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -188,19 +211,17 @@ CREATE TABLE IF NOT EXISTS login_attempts (
 );
 CREATE INDEX IF NOT EXISTS idx_login_attempts_ip_time ON login_attempts(ip, created_at);
 
--- ── Links de upload de fotos para clientes ──────────────────────────────────
--- O admin cria o link já escolhendo o kit (grid_size) e a quantidade de fotos.
--- Diferente de api_tokens (credencial de API, valor em texto puro nunca
--- persistido), este é um link compartilhável — o admin precisa poder copiá-lo
--- de novo a qualquer momento (não só na criação) —, então o valor em texto
--- puro fica salvo em `token` mesmo. token_hash/token_prefix continuam
--- existindo para a busca indexada (uploadLinkResolveByToken()) e para
--- identificar o link mesmo se `token` estiver vazio (linhas criadas antes
--- desta coluna existir — usar "Gerar novo link" nesse caso).
+-- ── Links de upload de fotos para clientes (nonce de uso único) ─────────────
+-- O admin cria o link já escolhendo o kit (grid_size) e a quantidade de fotos;
+-- o token bruto NUNCA é persistido, só o hash SHA-256 (mesmo esquema de
+-- api_tokens) — token_prefix é só pra identificar o link nas listagens. Por
+-- isso o valor completo só é mostrado uma vez (na criação ou ao "Gerar novo
+-- link"/regenerar); a URL em si é montada no JS (admin.js: buildUploadLink()),
+-- não no PHP, já que a base (origem + pasta public/) é sempre a mesma.
 -- submission_json guarda legendas/fundo/ajustes de cada foto enviada (os
 -- arquivos em si ficam em storage/uploads/<uuid>/), preenchido só depois que
 -- o cliente clica em "Salvar" — a partir daí status vira 'submitted' e o link
--- fica travado.
+-- fica travado (ver uploadLinkResolveByToken()).
 CREATE TABLE IF NOT EXISTS upload_links (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     uuid            TEXT NOT NULL UNIQUE,
@@ -208,7 +229,6 @@ CREATE TABLE IF NOT EXISTS upload_links (
     grid_size_id    INTEGER NULL REFERENCES grid_sizes(id) ON DELETE SET NULL,
     photo_count     INTEGER NOT NULL DEFAULT 0,
     notes           TEXT NULL,
-    token           TEXT NULL,
     token_hash      TEXT NOT NULL UNIQUE,
     token_prefix    TEXT NOT NULL,
     status          TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','submitted')),

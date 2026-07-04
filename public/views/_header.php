@@ -11,6 +11,7 @@ $navItems = [
     ['key' => 'assets', 'icon' => 'image', 'label' => 'Overlays & Fundos'],
     ['key' => 'bulk_import', 'icon' => 'drive_folder_upload', 'label' => 'Importação em Massa'],
     ['key' => 'phrases', 'icon' => 'format_quote', 'label' => 'Banco de Frases'],
+    ['key' => 'emoji_kitchen', 'icon' => 'emoji_emotions', 'label' => 'Emoji Kitchen'],
 ];
 $pageTitles = [
     'dashboard' => ['Painel', 'Visão geral do sistema'],
@@ -23,6 +24,7 @@ $pageTitles = [
     'bulk_import' => ['Importação em Massa', 'Importe coleções de imagens automaticamente'],
     'phrases'            => ['Banco de Frases', 'Frases motivacionais por autor/categoria/idioma'],
     'phrases_csv_import' => ['Importar Frases via CSV', 'Importação em massa de frases'],
+    'emoji_kitchen'       => ['Emoji Kitchen', 'Catálogo de combos importado do metadata.json'],
 ];
 $title = $pageTitles[$page][0] ?? 'CraftTools API';
 $subtitle = $pageTitles[$page][1] ?? '';
@@ -92,6 +94,7 @@ $subtitle = $pageTitles[$page][1] ?? '';
                 unset($_SESSION['flash']);
                 $cls = $flash['type'] === 'error' ? 'flash-error' : 'flash-success';
                 $icon = $flash['type'] === 'error' ? 'error' : 'check_circle';
+
                 echo '<div class="flash ' . $cls . '" data-autohide><span class="material-symbols-outlined">' . $icon . '</span>' . e($flash['msg']) . '</div>';
             }
             ?>

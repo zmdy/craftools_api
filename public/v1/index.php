@@ -56,9 +56,9 @@ if (isset($tokenResult['error'])) {
 $tier = $tokenResult['tier'] ?? 'free';
 
 $resource = isset($_GET['resource']) ? strtolower(trim((string) $_GET['resource'])) : '';
-$validResources = ['grid-sizes', 'album-templates', 'phrases', 'assets', 'backgrounds', 'overlays', 'collection'];
+$validResources = ['grid-sizes', 'album-templates', 'phrases', 'assets', 'backgrounds', 'overlays', 'collection', 'emoji-kitchen'];
 if (!in_array($resource, $validResources, true)) {
-    v1JsonError(400, 'Recurso inválido. Disponíveis: grid-sizes, album-templates, phrases, assets, backgrounds, overlays, collection.');
+    v1JsonError(400, 'Recurso inválido. Disponíveis: grid-sizes, album-templates, phrases, assets, backgrounds, overlays, collection, emoji-kitchen.');
 }
 
 $data = [];
@@ -107,6 +107,47 @@ switch ($resource) {
             v1JsonError(403, 'Esta coleção requer um nível de acesso superior.');
         }
         v1JsonError(404, 'Coleção não encontrada.');
+        break;
+
+    // Emoji Kitchen (catálogo importado do metadata.json de
+    // https://github.com/xsalazar/emoji-kitchen via painel admin):
+    //   ?resource=emoji-kitchen&mode=supported
+    //   ?resource=emoji-kitchen&mode=partners&emoji=😀
+    //   ?resource=emoji-kitchen&mode=combo&left=😀&right=😃
+    case 'emoji-kitchen':
+        $mode = isset($_GET['mode']) ? strtolower(trim((string) $_GET['mode'])) : '';
+
+        if ($mode === 'supported') {
+            $limit = intInput($_GET, 'limit', 500, 1, 2000);
+            $data = emojiKitchenSupportedList($limit);
+            break;
+        }
+
+        if ($mode === 'partners') {
+            $emoji = isset($_GET['emoji']) ? (string) $_GET['emoji'] : '';
+            if ($emoji === '') {
+                v1JsonError(400, 'Parâmetro "emoji" é obrigatório para mode=partners.');
+            }
+            $data = emojiKitchenPartners($emoji);
+            break;
+        }
+
+        if ($mode === 'combo') {
+            $left = isset($_GET['left']) ? (string) $_GET['left'] : '';
+            $right = isset($_GET['right']) ? (string) $_GET['right'] : '';
+            if ($left === '' || $right === '') {
+                v1JsonError(400, 'Parâmetros "left" e "right" são obrigatórios para mode=combo.');
+            }
+            $combo = emojiKitchenFindCombo($left, $right);
+            $data = $combo ? [
+                'imageUrl' => $combo['image_url'],
+                'leftEmoji' => $combo['left_emoji'],
+                'rightEmoji' => $combo['right_emoji'],
+            ] : null;
+            break;
+        }
+
+        v1JsonError(400, 'Parâmetro "mode" inválido. Disponíveis: supported, partners, combo.');
         break;
 }
 
