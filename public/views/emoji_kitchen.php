@@ -101,8 +101,8 @@ $listTotalPages = max(1, (int) ceil($listTotal / $listPerPage));
             <?php foreach ($listRows as $row): ?>
                 <tr>
                     <td><img src="<?= e($row['image_url']) ?>" alt="" loading="lazy" style="width:40px; height:40px; object-fit:contain;"></td>
-                    <td style="font-size:20px;"><?= e($row['left_emoji']) ?></td>
-                    <td style="font-size:20px;"><?= e($row['right_emoji']) ?></td>
+                    <td style="font-size:20px; font-family:'Noto Color Emoji', sans-serif;"><?= e($row['left_emoji']) ?></td>
+                    <td style="font-size:20px; font-family:'Noto Color Emoji', sans-serif;"><?= e($row['right_emoji']) ?></td>
                     <td class="text-muted"><?= $row['is_latest'] ? 'Sim' : 'Não' ?></td>
                 </tr>
             <?php endforeach; ?>

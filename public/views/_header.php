@@ -24,6 +24,7 @@ $pageTitles = [
     'bulk_import' => ['Importação em Massa', 'Importe coleções de imagens automaticamente'],
     'phrases'            => ['Banco de Frases', 'Frases motivacionais por autor/categoria/idioma'],
     'phrases_csv_import' => ['Importar Frases via CSV', 'Importação em massa de frases'],
+    'phrase_collections' => ['Coleções de Frases', 'Temas/conjuntos usados para agrupar frases'],
     'emoji_kitchen'       => ['Emoji Kitchen', 'Catálogo de combos importado do metadata.json'],
 ];
 $title = $pageTitles[$page][0] ?? 'CraftTools API';
@@ -39,6 +40,7 @@ $subtitle = $pageTitles[$page][1] ?? '';
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,400&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Color+Emoji&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/admin.css">
 </head>
 <body>

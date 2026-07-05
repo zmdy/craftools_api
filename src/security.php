@@ -10,7 +10,7 @@ function applySecurityHeaders(bool $isJsonApi = false): void {
     header('Permissions-Policy: geolocation=(), microphone=(), camera=()');
 
     if (!$isJsonApi) {
-        header("Content-Security-Policy: default-src 'self'; img-src 'self' data: blob:; "
+        header("Content-Security-Policy: default-src 'self'; img-src 'self' data: blob: https://www.gstatic.com; "
             . "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
             . "font-src 'self' https://fonts.gstatic.com data:; "
             . "script-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");

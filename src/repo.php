@@ -351,6 +351,60 @@ function phraseDelete(int $id): void {
 }
 
 /**
+ * Aplica alterações em massa a um conjunto de frases (tier, idioma, categoria
+ * e/ou coleção) -- usado pela ação "Aplicar" da seleção múltipla no painel
+ * admin. Cada campo em $changes é opcional; só os informados são alterados
+ * (mesmo valor para todas as frases dos $ids informados).
+ * @param int[] $ids
+ * @param array{tier?:string, language?:string, category?:string, collection?:string} $changes
+ * @return int quantidade de frases efetivamente atualizadas
+ */
+function phraseBulkUpdate(array $ids, array $changes): int {
+    $ids = array_values(array_unique(array_filter(array_map('intval', $ids), fn($v) => $v > 0)));
+    if (!$ids) {
+        return 0;
+    }
+
+    $set = [];
+    $params = [];
+    if (array_key_exists('tier', $changes) && $changes['tier'] !== '') {
+        $set[] = 'tier = ?';
+        $params[] = $changes['tier'];
+    }
+    if (array_key_exists('language', $changes) && $changes['language'] !== '') {
+        $set[] = 'language = ?';
+        $params[] = $changes['language'];
+    }
+    if (array_key_exists('category', $changes) && $changes['category'] !== '') {
+        $set[] = 'category = ?';
+        $params[] = phraseNormalizeCategory($changes['category']);
+    }
+
+    $count = 0;
+    if ($set) {
+        $set[] = 'updated_at = ?';
+        $params[] = nowSql();
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $sql = 'UPDATE phrases SET ' . implode(', ', $set) . " WHERE id IN ({$placeholders})";
+        $stmt = db()->prepare($sql);
+        $stmt->execute(array_merge($params, $ids));
+        $count = $stmt->rowCount();
+    }
+
+    // Coleção é tratada à parte (tabela de vínculo, não coluna de phrases).
+    // '' explícito = remove a coleção; ausência da chave = não mexe na coleção.
+    if (array_key_exists('collection', $changes)) {
+        $collectionId = $changes['collection'] !== '' ? phraseCollectionFindOrCreateByName($changes['collection']) : null;
+        foreach ($ids as $id) {
+            phraseSetCollection($id, $collectionId);
+        }
+        $count = max($count, count($ids));
+    }
+
+    return $count;
+}
+
+/**
  * Normaliza categorias vindas de qualquer fonte (string CSV ou array) em string CSV limpa.
  * Ex: "  amor , motivacional " → "amor,motivacional"
  */
@@ -453,6 +507,28 @@ function phraseCollectionFindOrCreateByName(string $name): ?int {
         'active'     => 1,
         'created_at' => nowSql(),
         'updated_at' => nowSql(),
+    ]);
+}
+
+/** Cria uma coleção com nome + descrição -- usado pela tela de gerenciamento de coleções. */
+function phraseCollectionCreate(string $name, string $description = ''): int {
+    return repoInsert('phrase_collections', [
+        'uuid'        => uuidv4(),
+        'name'        => trim($name),
+        'description' => trim($description),
+        'sort_order'  => 0,
+        'active'      => 1,
+        'created_at'  => nowSql(),
+        'updated_at'  => nowSql(),
+    ]);
+}
+
+function phraseCollectionUpdate(int $id, string $name, string $description = '', bool $active = true): void {
+    repoUpdate('phrase_collections', $id, [
+        'name'        => trim($name),
+        'description' => trim($description),
+        'active'      => $active ? 1 : 0,
+        'updated_at'  => nowSql(),
     ]);
 }
 
