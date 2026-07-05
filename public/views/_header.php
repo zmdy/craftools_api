@@ -12,6 +12,7 @@ $navItems = [
     ['key' => 'bulk_import', 'icon' => 'drive_folder_upload', 'label' => 'Importação em Massa'],
     ['key' => 'phrases', 'icon' => 'format_quote', 'label' => 'Banco de Frases'],
     ['key' => 'emoji_kitchen', 'icon' => 'emoji_emotions', 'label' => 'Emoji Kitchen'],
+    ['key' => 'api_logs', 'icon' => 'history', 'label' => 'Logs de API'],
 ];
 $pageTitles = [
     'dashboard' => ['Painel', 'Visão geral do sistema'],
@@ -26,6 +27,7 @@ $pageTitles = [
     'phrases_csv_import' => ['Importar Frases via CSV', 'Importação em massa de frases'],
     'phrase_collections' => ['Coleções de Frases', 'Temas/conjuntos usados para agrupar frases'],
     'emoji_kitchen'       => ['Emoji Kitchen', 'Catálogo de combos importado do metadata.json'],
+    'api_logs'            => ['Logs de API', 'Todo acesso à API pública (/v1), com sucesso ou erro'],
 ];
 $title = $pageTitles[$page][0] ?? 'CraftTools API';
 $subtitle = $pageTitles[$page][1] ?? '';

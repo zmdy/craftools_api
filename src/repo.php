@@ -871,3 +871,141 @@ function dashboardCounts(): array {
         'phrases' => $count('phrases'),
     ];
 }
+
+// ============================================================================
+// api_access_logs — 1 linha por requisição à API pública (/v1), sucesso ou
+// erro. Alimenta a aba "Logs de API" do painel admin.
+// ============================================================================
+
+/**
+ * Remove o valor do parâmetro "token" de uma query string antes de guardá-la
+ * no log -- o token dá acesso à API, então nunca deve ser persistido em texto
+ * puro em lugar nenhum (mesma cautela já aplicada a api_tokens/upload_links,
+ * que só guardam o hash SHA-256).
+ */
+function redactApiQueryString(string $queryString): string {
+    if ($queryString === '') {
+        return '';
+    }
+    return preg_replace('/(^|&)token=[^&]*/i', '$1token=***', $queryString) ?? $queryString;
+}
+
+/**
+ * Grava 1 acesso à API pública -- chamado de public/v1/index.php em TODO
+ * caminho de saída (sucesso ou erro), antes de responder. Nunca deixa uma
+ * falha de log derrubar a resposta real da API (captura qualquer exceção).
+ * @param array $data { resource?, mode?, query_string?, token_id?, user_id?,
+ *                       tier?, status_code?, error_message?, ip?, user_agent?,
+ *                       duration_ms? }
+ */
+function apiAccessLogRecord(array $data): void {
+    try {
+        repoInsert('api_access_logs', [
+            'resource'      => $data['resource'] ?? null,
+            'mode'          => $data['mode'] ?? null,
+            'query_string'  => isset($data['query_string']) ? redactApiQueryString((string) $data['query_string']) : null,
+            'token_id'      => $data['token_id'] ?? null,
+            'user_id'       => $data['user_id'] ?? null,
+            'tier'          => $data['tier'] ?? 'free',
+            'status_code'   => $data['status_code'] ?? 200,
+            'error_message' => $data['error_message'] ?? null,
+            'ip'            => $data['ip'] ?? clientIp(),
+            'user_agent'    => $data['user_agent'] ?? ($_SERVER['HTTP_USER_AGENT'] ?? null),
+            'duration_ms'   => $data['duration_ms'] ?? null,
+            'created_at'    => nowSql(),
+        ]);
+
+        // Limpeza oportunista de logs muito antigos (mesma estratégia de
+        // rateLimitCheck() em security.php) -- evita crescimento indefinido
+        // da tabela sem precisar de um cron/tarefa agendada separada.
+        if (random_int(1, 300) === 1) {
+            db()->prepare("DELETE FROM api_access_logs WHERE created_at < datetime('now', '-180 days')")->execute();
+        }
+    } catch (Throwable $ex) {
+        error_log('apiAccessLogRecord: ' . $ex->getMessage());
+    }
+}
+
+/** Monta a cláusula WHERE (e params) compartilhada por apiAccessLogList()/Count(). */
+function apiAccessLogWhereClause(array $filters): array {
+    $clauses = ['1=1'];
+    $params = [];
+
+    if (!empty($filters['resource'])) {
+        $clauses[] = 'l.resource = ?';
+        $params[] = $filters['resource'];
+    }
+    if (!empty($filters['tier'])) {
+        $clauses[] = 'l.tier = ?';
+        $params[] = $filters['tier'];
+    }
+    if (!empty($filters['status'])) {
+        if ($filters['status'] === 'error') {
+            $clauses[] = 'l.status_code >= 400';
+        } elseif ($filters['status'] === 'success') {
+            $clauses[] = 'l.status_code < 400';
+        }
+    }
+    if (!empty($filters['date_from'])) {
+        $clauses[] = 'l.created_at >= ?';
+        $params[] = $filters['date_from'] . ' 00:00:00';
+    }
+    if (!empty($filters['date_to'])) {
+        $clauses[] = 'l.created_at <= ?';
+        $params[] = $filters['date_to'] . ' 23:59:59';
+    }
+
+    return [implode(' AND ', $clauses), $params];
+}
+
+/**
+ * Lista paginada de acessos à API -- traz também o rótulo/prefixo do token
+ * (quando houver) via LEFT JOIN, para exibição direta na tabela do painel.
+ */
+function apiAccessLogList(int $limit, int $offset, array $filters = []): array {
+    $limit = max(1, min(200, $limit));
+    $offset = max(0, $offset);
+    [$where, $params] = apiAccessLogWhereClause($filters);
+
+    $sql = "SELECT l.*, t.label AS token_label, t.token_prefix AS token_prefix
+            FROM api_access_logs l
+            LEFT JOIN api_tokens t ON t.id = l.token_id
+            WHERE {$where}
+            ORDER BY l.created_at DESC, l.id DESC
+            LIMIT ? OFFSET ?";
+    $stmt = db()->prepare($sql);
+    $i = 1;
+    foreach ($params as $p) {
+        $stmt->bindValue($i++, $p);
+    }
+    $stmt->bindValue($i++, $limit, PDO::PARAM_INT);
+    $stmt->bindValue($i++, $offset, PDO::PARAM_INT);
+    $stmt->execute();
+    return $stmt->fetchAll();
+}
+
+/** Total de linhas que respeitam o mesmo filtro de apiAccessLogList() -- usado para paginação. */
+function apiAccessLogCount(array $filters = []): int {
+    [$where, $params] = apiAccessLogWhereClause($filters);
+    $stmt = db()->prepare("SELECT COUNT(*) AS c FROM api_access_logs l WHERE {$where}");
+    $stmt->execute($params);
+    $row = $stmt->fetch();
+    return (int) ($row['c'] ?? 0);
+}
+
+/** Valores distintos de "resource" já logados -- popula o filtro de recurso no painel. */
+function apiAccessLogDistinctResources(): array {
+    $rows = db()->query("SELECT DISTINCT resource FROM api_access_logs WHERE resource IS NOT NULL AND resource != '' ORDER BY resource ASC")->fetchAll();
+    return array_map(static function (array $r): string {
+        return (string) $r['resource'];
+    }, $rows);
+}
+
+/** Contagens rápidas para os cartões de resumo da aba "Logs de API". */
+function apiAccessLogStats(): array {
+    $pdo = db();
+    $total = (int) ($pdo->query('SELECT COUNT(*) AS c FROM api_access_logs')->fetch()['c'] ?? 0);
+    $today = (int) ($pdo->query("SELECT COUNT(*) AS c FROM api_access_logs WHERE date(created_at) = date('now')")->fetch()['c'] ?? 0);
+    $errorsToday = (int) ($pdo->query("SELECT COUNT(*) AS c FROM api_access_logs WHERE date(created_at) = date('now') AND status_code >= 400")->fetch()['c'] ?? 0);
+    return ['total' => $total, 'today' => $today, 'errors_today' => $errorsToday];
+}

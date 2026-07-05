@@ -186,6 +186,7 @@ table.empty-row td { text-align: center; color: var(--text-muted); padding: 30px
 .badge-premium { background: rgba(245,158,11,.15); color: #f59e0b; }
 .badge-on { background: rgba(16,185,129,.12); color: #10b981; }
 .badge-off { background: rgba(113,113,122,.15); color: #71717a; }
+.badge-danger { background: rgba(239,68,68,.12); color: var(--danger); }
 
 /* ---- Botões ---------------------------------------------------------------- */
 .btn {

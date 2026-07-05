@@ -25,7 +25,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
+// Contexto acumulado ao longo da requisição, usado por apiAccessLogRecord()
+// em TODO caminho de saída (sucesso ou erro) -- ver v1JsonError() e o echo
+// final. $logCtx some enriquecido conforme token/recurso/modo vão sendo
+// resolvidos; v1JsonError() lê o que já estiver preenchido até o ponto do erro.
+$requestStartedAt = microtime(true);
+$logCtx = [
+    'resource' => null,
+    'mode' => null,
+    'query_string' => $_SERVER['QUERY_STRING'] ?? '',
+    'token_id' => null,
+    'user_id' => null,
+    'tier' => 'free',
+];
+
+function v1LogAndExit(int $code, ?string $errorMessage = null): void {
+    global $logCtx, $requestStartedAt;
+    apiAccessLogRecord(array_merge($logCtx, [
+        'status_code' => $code,
+        'error_message' => $errorMessage,
+        'duration_ms' => (int) round((microtime(true) - $requestStartedAt) * 1000),
+    ]));
+}
+
 function v1JsonError(int $code, string $message): void {
+    v1LogAndExit($code, $message);
     http_response_code($code);
     echo json_encode(['status' => 'error', 'message' => $message], JSON_UNESCAPED_UNICODE);
     exit;
@@ -54,8 +78,12 @@ if (isset($tokenResult['error'])) {
     v1JsonError($code, $msg);
 }
 $tier = $tokenResult['tier'] ?? 'free';
+$logCtx['tier'] = $tier;
+$logCtx['token_id'] = $tokenResult['token_row']['id'] ?? null;
+$logCtx['user_id'] = $tokenResult['token_row']['user_id'] ?? null;
 
 $resource = isset($_GET['resource']) ? strtolower(trim((string) $_GET['resource'])) : '';
+$logCtx['resource'] = $resource !== '' ? $resource : null;
 $validResources = ['grid-sizes', 'album-templates', 'phrases', 'phrase-collections', 'assets', 'backgrounds', 'overlays', 'collection', 'emoji-kitchen'];
 if (!in_array($resource, $validResources, true)) {
     v1JsonError(400, 'Recurso inválido. Disponíveis: grid-sizes, album-templates, phrases, phrase-collections, assets, backgrounds, overlays, collection, emoji-kitchen.');
@@ -127,6 +155,7 @@ switch ($resource) {
     //   ?resource=emoji-kitchen&mode=list&emoji=😀&limit=50&offset=0
     case 'emoji-kitchen':
         $mode = isset($_GET['mode']) ? strtolower(trim((string) $_GET['mode'])) : '';
+        $logCtx['mode'] = $mode !== '' ? $mode : null;
 
         if ($mode === 'supported') {
             $limit = intInput($_GET, 'limit', 500, 1, 2000);
@@ -183,4 +212,5 @@ switch ($resource) {
         break;
 }
 
+v1LogAndExit(200);
 echo json_encode(['status' => 'success', 'access_level' => $tier, 'data' => $data], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);

@@ -204,6 +204,32 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_emoji_kitchen_pair ON emoji_kitchen_combos
 CREATE INDEX IF NOT EXISTS idx_emoji_kitchen_left ON emoji_kitchen_combos(left_codepoint);
 CREATE INDEX IF NOT EXISTS idx_emoji_kitchen_right ON emoji_kitchen_combos(right_codepoint);
 
+-- ── Log de acesso à API pública (/v1) — 1 linha por requisição, sucesso ou
+-- erro. token_id/user_id ficam NULL quando o acesso é sem token (tier free)
+-- ou quando o token não foi resolvido (ex.: token inválido). query_string
+-- guarda os parâmetros da requisição para depuração, mas o parâmetro "token"
+-- é sempre redigido antes de gravar (nunca persistimos token em texto puro,
+-- nem aqui) -- ver redactApiQueryString() em repo.php.
+CREATE TABLE IF NOT EXISTS api_access_logs (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    resource        TEXT NULL,
+    mode            TEXT NULL,
+    query_string    TEXT NULL,
+    token_id        INTEGER NULL REFERENCES api_tokens(id) ON DELETE SET NULL,
+    user_id         INTEGER NULL REFERENCES app_users(id) ON DELETE SET NULL,
+    tier            TEXT NOT NULL DEFAULT 'free',
+    status_code     INTEGER NOT NULL DEFAULT 200,
+    error_message   TEXT NULL,
+    ip              TEXT NULL,
+    user_agent      TEXT NULL,
+    duration_ms     INTEGER NULL,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_api_access_logs_created ON api_access_logs(created_at);
+CREATE INDEX IF NOT EXISTS idx_api_access_logs_resource ON api_access_logs(resource);
+CREATE INDEX IF NOT EXISTS idx_api_access_logs_token ON api_access_logs(token_id);
+CREATE INDEX IF NOT EXISTS idx_api_access_logs_status ON api_access_logs(status_code);
+
 -- ── Log de auditoria das ações administrativas ───────────────────────────────
 CREATE TABLE IF NOT EXISTS audit_log (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
