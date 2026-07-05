@@ -71,6 +71,7 @@ function ensureAdditiveSchema(PDO $pdo): void {
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
             uuid            TEXT NOT NULL UNIQUE,
             name            TEXT NOT NULL UNIQUE,
+            description     TEXT NOT NULL DEFAULT '',
             sort_order      INTEGER NOT NULL DEFAULT 0,
             active          INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0,1)),
             created_at      TEXT NOT NULL DEFAULT (datetime('now')),
@@ -83,6 +84,23 @@ function ensureAdditiveSchema(PDO $pdo): void {
         );
         CREATE INDEX IF NOT EXISTS idx_phrase_collection_links_collection ON phrase_collection_links(collection_id);
     ");
+
+    // phrase_collections pode já existir (criada por uma versão anterior
+    // desta função, antes da coluna description existir) -- ALTER TABLE ADD
+    // COLUMN é uma operação leve e segura em SQLite (não reescreve a tabela),
+    // então é usada aqui, mas só depois de checar via PRAGMA que a coluna
+    // realmente falta (idempotente).
+    $cols = $pdo->query('PRAGMA table_info(phrase_collections)')->fetchAll(PDO::FETCH_ASSOC);
+    $hasDescription = false;
+    foreach ($cols as $col) {
+        if ($col['name'] === 'description') {
+            $hasDescription = true;
+            break;
+        }
+    }
+    if (!$hasDescription) {
+        $pdo->exec("ALTER TABLE phrase_collections ADD COLUMN description TEXT NOT NULL DEFAULT ''");
+    }
 }
 
 /** Gera um UUID v4 (usado como identificador público de todas as entidades). */

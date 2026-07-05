@@ -114,23 +114,76 @@ if ($editing) {
                     <a href="index.php?page=phrases" class="btn btn-outline btn-sm">Limpar filtros</a>
                 <?php endif; ?>
             </form>
-            <a href="index.php?page=phrases_csv_import" class="btn btn-outline btn-sm" style="margin-left:auto;">
+            <a href="index.php?page=phrase_collections" class="btn btn-outline btn-sm" style="margin-left:auto;">
+                <span class="material-symbols-outlined" style="font-size:15px;">sell</span> Coleções
+            </a>
+            <a href="index.php?page=phrases_csv_import" class="btn btn-outline btn-sm">
                 <span class="material-symbols-outlined" style="font-size:15px;">upload_file</span> Importar CSV
             </a>
         </div>
     </div>
+
+    <div class="card-body" style="background:var(--bg-input); border-bottom:1px solid var(--border);">
+        <form id="bulk-edit-form" method="post" action="index.php?page=phrases">
+            <?= csrfField() ?>
+            <input type="hidden" name="_action" value="bulk_update">
+            <strong style="font-size:13px; display:block; margin-bottom:10px;">Alterar em massa</strong>
+            <div class="field-row" style="align-items:flex-end; flex-wrap:wrap;">
+                <div class="field">
+                    <label class="d-flex" style="align-items:center; gap:6px; font-weight:normal;">
+                        <input type="checkbox" name="apply_tier" value="1"> Tier
+                    </label>
+                    <select name="tier">
+                        <option value="free">Free</option>
+                        <option value="plus">Plus</option>
+                        <option value="premium">Premium</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label class="d-flex" style="align-items:center; gap:6px; font-weight:normal;">
+                        <input type="checkbox" name="apply_language" value="1"> Idioma
+                    </label>
+                    <select name="language">
+                        <option value="pt-br">Português (BR)</option>
+                        <option value="en">English</option>
+                        <option value="es">Español</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label class="d-flex" style="align-items:center; gap:6px; font-weight:normal;">
+                        <input type="checkbox" name="apply_category" value="1"> Categorias
+                    </label>
+                    <input type="text" name="category" placeholder="Ex: motivacional, amor">
+                </div>
+                <div class="field">
+                    <label class="d-flex" style="align-items:center; gap:6px; font-weight:normal;">
+                        <input type="checkbox" name="apply_collection" value="1"> Coleção
+                    </label>
+                    <input type="text" name="collection" placeholder="Vazio remove a coleção" list="collection-suggestions">
+                </div>
+                <div class="field">
+                    <button type="submit" class="btn btn-primary" data-confirm="Aplicar as alterações a todas as frases marcadas na tabela abaixo?">
+                        <span class="material-symbols-outlined">done_all</span> Aplicar às selecionadas
+                    </button>
+                </div>
+            </div>
+            <div class="help-text">Marque a caixa ao lado de cada campo que deseja alterar e selecione as frases na tabela abaixo.</div>
+        </form>
+    </div>
+
     <div class="card-body flush">
         <table class="data-table">
-            <thead><tr><th>Frase</th><th>Autor</th><th>Coleção</th><th>Categorias</th><th>Idioma</th><th>Tier</th><th></th></tr></thead>
+            <thead><tr><th><input type="checkbox" id="ph-select-all"></th><th>Frase</th><th>Autor</th><th>Coleção</th><th>Categorias</th><th>Idioma</th><th>Tier</th><th></th></tr></thead>
             <tbody>
             <?php if (!$rows): ?>
-                <tr class="empty-row"><td colspan="7">Nenhuma frase cadastrada.</td></tr>
+                <tr class="empty-row"><td colspan="8">Nenhuma frase cadastrada.</td></tr>
             <?php endif; ?>
             <?php foreach ($rows as $r): ?>
                 <?php
                     $cats = array_values(array_filter(array_map('trim', explode(',', $r['category'] ?? ''))));
                 ?>
                 <tr>
+                    <td><input type="checkbox" name="ids[]" value="<?= (int) $r['id'] ?>" form="bulk-edit-form" class="ph-row-check"></td>
                     <td style="max-width:340px;"><?= e(mb_strimwidth($r['phrase'], 0, 120, '…')) ?></td>
                     <td class="text-muted"><?= e($r['author'] ?: '—') ?></td>
                     <td class="text-muted">
@@ -162,3 +215,5 @@ if ($editing) {
         </table>
     </div>
 </div>
+
+<script src="assets/phrases-bulk.js"></script>
