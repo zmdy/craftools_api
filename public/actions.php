@@ -211,6 +211,58 @@ try {
                 auditLog($adminId, 'delete', 'phrases', (string) $id);
                 flashRedirect('success', 'Frase removida.', 'index.php?page=phrases');
             }
+            // Modificação em massa: só os campos com a caixa "Alterar" marcada
+            // entram em $changes -- os demais permanecem intocados nas frases
+            // selecionadas (ver phraseBulkUpdate() em repo.php).
+            if ($action === 'bulk_update') {
+                $ids = array_map('intval', (array) ($_POST['ids'] ?? []));
+                $changes = [];
+                if (!empty($_POST['apply_tier']) && !empty($_POST['tier'])) {
+                    $changes['tier'] = (string) $_POST['tier'];
+                }
+                if (!empty($_POST['apply_language']) && !empty($_POST['language'])) {
+                    $changes['language'] = (string) $_POST['language'];
+                }
+                if (!empty($_POST['apply_category'])) {
+                    $changes['category'] = (string) ($_POST['category'] ?? '');
+                }
+                if (!empty($_POST['apply_collection'])) {
+                    $changes['collection'] = trim((string) ($_POST['collection'] ?? ''));
+                }
+                if (!$ids || !$changes) {
+                    flashRedirect('error', 'Selecione ao menos uma frase e um campo para alterar em massa.', 'index.php?page=phrases');
+                }
+                $count = phraseBulkUpdate($ids, $changes);
+                auditLog($adminId, 'bulk_update', 'phrases', implode(',', $ids));
+                flashRedirect('success', $count . ' frase(s) atualizada(s) em massa.', 'index.php?page=phrases');
+            }
+            break;
+
+        // ----------------------------------------------------- phrase_collections
+        case 'phrase_collections':
+            if ($action === 'save') {
+                $id = (int) ($_POST['id'] ?? 0);
+                $name = trim((string) ($_POST['name'] ?? ''));
+                if ($name === '') {
+                    flashRedirect('error', 'O nome da coleção é obrigatório.', 'index.php?page=phrase_collections');
+                }
+                $description = (string) ($_POST['description'] ?? '');
+                $active = !empty($_POST['active']);
+                if ($id > 0) {
+                    phraseCollectionUpdate($id, $name, $description, $active);
+                    auditLog($adminId, 'update', 'phrase_collections', (string) $id);
+                    flashRedirect('success', 'Coleção atualizada.', 'index.php?page=phrase_collections');
+                }
+                $newId = phraseCollectionCreate($name, $description);
+                auditLog($adminId, 'create', 'phrase_collections', (string) $newId);
+                flashRedirect('success', 'Coleção criada.', 'index.php?page=phrase_collections');
+            }
+            if ($action === 'delete') {
+                $id = (int) ($_POST['id'] ?? 0);
+                phraseCollectionDelete($id);
+                auditLog($adminId, 'delete', 'phrase_collections', (string) $id);
+                flashRedirect('success', 'Coleção removida (as frases não foram excluídas).', 'index.php?page=phrase_collections');
+            }
             break;
 
         // --------------------------------------------------------------- assets
