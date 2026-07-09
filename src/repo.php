@@ -873,8 +873,11 @@ function dashboardCounts(): array {
 }
 
 // ============================================================================
-// api_access_logs — 1 linha por requisição à API pública (/v1), sucesso ou
-// erro. Alimenta a aba "Logs de API" do painel admin.
+// api_access_logs (JSON-Lines) — 1 arquivo por dia em storage/logs/api/.
+// Cada linha é um objeto JSON com os campos da requisição. O banco de dados
+// NÃO é mais usado para logs de acesso — a tabela api_access_logs para de
+// crescer e pode ser removida manualmente quando conveniente:
+//   sqlite3 craftools.db "DROP TABLE IF EXISTS api_access_logs;"
 // ============================================================================
 
 /**
@@ -890,122 +893,257 @@ function redactApiQueryString(string $queryString): string {
     return preg_replace('/(^|&)token=[^&]*/i', '$1token=***', $queryString) ?? $queryString;
 }
 
+// ── Helpers internos de arquivo ───────────────────────────────────────────────
+
+/** Diretório base dos arquivos de log diários. */
+function apiLogDir(): string {
+    return CRAFTOOLS_API_ROOT . '/storage/logs/api';
+}
+
+/** Caminho completo para o .jsonl de uma data (YYYY-MM-DD). */
+function apiLogFilePath(string $date): string {
+    return apiLogDir() . '/' . $date . '.jsonl';
+}
+
 /**
- * Grava 1 acesso à API pública -- chamado de public/v1/index.php em TODO
- * caminho de saída (sucesso ou erro), antes de responder. Nunca deixa uma
- * falha de log derrubar a resposta real da API (captura qualquer exceção).
- * @param array $data { resource?, mode?, query_string?, token_id?, user_id?,
- *                       tier?, status_code?, error_message?, ip?, user_agent?,
- *                       duration_ms? }
+ * Conta linhas de um arquivo sem parsear JSON — rápido para totais globais.
+ */
+function apiLogCountLines(string $path): int {
+    $count = 0;
+    $fh = @fopen($path, 'r');
+    if (!$fh) return 0;
+    while (fgets($fh) !== false) {
+        $count++;
+    }
+    fclose($fh);
+    return $count;
+}
+
+/**
+ * Retorna os arquivos .jsonl existentes no intervalo de datas, do mais recente
+ * para o mais antigo. Sem filtro de data, cobre os últimos 30 dias.
+ */
+function apiLogFilesInRange(?string $dateFrom, ?string $dateTo): array {
+    $dir = apiLogDir();
+    if (!is_dir($dir)) return [];
+
+    $from = $dateFrom ?? gmdate('Y-m-d', strtotime('-29 days'));
+    $to   = $dateTo   ?? gmdate('Y-m-d');
+
+    $files = [];
+    $d   = new DateTime($from);
+    $end = new DateTime($to);
+    while ($d <= $end) {
+        $date = $d->format('Y-m-d');
+        $path = apiLogFilePath($date);
+        if (file_exists($path)) {
+            $files[] = ['date' => $date, 'path' => $path];
+        }
+        $d->modify('+1 day');
+    }
+    return array_reverse($files); // mais recente primeiro
+}
+
+/**
+ * Lê um .jsonl e retorna as linhas que passam nos filtros resource/tier/status.
+ * Resultado em ordem cronológica ascendente (como está no arquivo).
+ */
+function apiLogParseFile(string $path, array $filters): array {
+    $fh = @fopen($path, 'r');
+    if (!$fh) return [];
+
+    $filterResource = $filters['resource'] ?? null;
+    $filterTier     = $filters['tier']     ?? null;
+    $filterStatus   = $filters['status']   ?? null; // 'success' | 'error' | null
+
+    $rows = [];
+    while (($line = fgets($fh)) !== false) {
+        $line = trim($line);
+        if ($line === '') continue;
+        $r = json_decode($line, true);
+        if (!is_array($r)) continue;
+
+        if ($filterResource !== null && ($r['res'] ?? null) !== $filterResource) continue;
+        if ($filterTier     !== null && ($r['tier'] ?? null) !== $filterTier)    continue;
+        if ($filterStatus   !== null) {
+            $st = (int) ($r['st'] ?? 200);
+            if ($filterStatus === 'error'   && $st < 400)  continue;
+            if ($filterStatus === 'success' && $st >= 400) continue;
+        }
+
+        $rows[] = $r;
+    }
+    fclose($fh);
+    return $rows;
+}
+
+/**
+ * Converte uma linha bruta de log no formato que api_logs.php espera,
+ * enriquecendo com label/prefixo do token via $tokenMap.
+ */
+function apiLogRowToDisplay(array $r, array $tokenMap): array {
+    $tokId = isset($r['tok']) ? (int) $r['tok'] : null;
+    return [
+        'created_at'    => $r['ts']   ?? null,
+        'resource'      => $r['res']  ?? null,
+        'mode'          => $r['mod']  ?? null,
+        'query_string'  => $r['qs']   ?? null,
+        'token_id'      => $tokId,
+        'user_id'       => $r['uid']  ?? null,
+        'tier'          => $r['tier'] ?? 'free',
+        'status_code'   => $r['st']   ?? 200,
+        'error_message' => $r['err']  ?? null,
+        'ip'            => $r['ip']   ?? null,
+        'user_agent'    => $r['ua']   ?? null,
+        'duration_ms'   => $r['ms']   ?? null,
+        'token_label'   => $tokId !== null ? ($tokenMap[$tokId]['label']        ?? null) : null,
+        'token_prefix'  => $tokId !== null ? ($tokenMap[$tokId]['token_prefix'] ?? null) : null,
+    ];
+}
+
+/** Carrega todos os tokens em mapa [id => row] para enriquecer linhas de log. */
+function apiLogLoadTokenMap(): array {
+    $rows = db()->query('SELECT id, label, token_prefix FROM api_tokens')->fetchAll();
+    $map  = [];
+    foreach ($rows as $row) {
+        $map[(int) $row['id']] = $row;
+    }
+    return $map;
+}
+
+// ── Funções públicas (mesma assinatura de antes — api_logs.php não precisa mudar) ──
+
+/**
+ * Grava 1 acesso à API pública no arquivo JSON-Lines do dia (UTC).
+ * Nunca deixa uma falha de log derrubar a resposta real da API.
  */
 function apiAccessLogRecord(array $data): void {
     try {
-        repoInsert('api_access_logs', [
-            'resource'      => $data['resource'] ?? null,
-            'mode'          => $data['mode'] ?? null,
-            'query_string'  => isset($data['query_string']) ? redactApiQueryString((string) $data['query_string']) : null,
-            'token_id'      => $data['token_id'] ?? null,
-            'user_id'       => $data['user_id'] ?? null,
-            'tier'          => $data['tier'] ?? 'free',
-            'status_code'   => $data['status_code'] ?? 200,
-            'error_message' => $data['error_message'] ?? null,
-            'ip'            => $data['ip'] ?? clientIp(),
-            'user_agent'    => $data['user_agent'] ?? ($_SERVER['HTTP_USER_AGENT'] ?? null),
-            'duration_ms'   => $data['duration_ms'] ?? null,
-            'created_at'    => nowSql(),
-        ]);
-
-        // Limpeza oportunista de logs muito antigos (mesma estratégia de
-        // rateLimitCheck() em security.php) -- evita crescimento indefinido
-        // da tabela sem precisar de um cron/tarefa agendada separada.
-        if (random_int(1, 300) === 1) {
-            db()->prepare("DELETE FROM api_access_logs WHERE created_at < datetime('now', '-180 days')")->execute();
+        $dir = apiLogDir();
+        if (!is_dir($dir)) {
+            mkdir($dir, 0755, true);
         }
+
+        $line = json_encode([
+            'ts'   => $data['created_at']    ?? gmdate('Y-m-d H:i:s'),
+            'res'  => $data['resource']      ?? null,
+            'mod'  => $data['mode']          ?? null,
+            'qs'   => isset($data['query_string'])
+                        ? redactApiQueryString((string) $data['query_string'])
+                        : null,
+            'tok'  => $data['token_id']      ?? null,
+            'uid'  => $data['user_id']       ?? null,
+            'tier' => $data['tier']          ?? 'free',
+            'st'   => $data['status_code']   ?? 200,
+            'err'  => $data['error_message'] ?? null,
+            'ip'   => $data['ip']            ?? clientIp(),
+            'ua'   => $data['user_agent']    ?? ($_SERVER['HTTP_USER_AGENT'] ?? null),
+            'ms'   => $data['duration_ms']   ?? null,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        file_put_contents(
+            apiLogFilePath(gmdate('Y-m-d')),
+            $line . "\n",
+            FILE_APPEND | LOCK_EX
+        );
     } catch (Throwable $ex) {
         error_log('apiAccessLogRecord: ' . $ex->getMessage());
     }
 }
 
-/** Monta a cláusula WHERE (e params) compartilhada por apiAccessLogList()/Count(). */
-function apiAccessLogWhereClause(array $filters): array {
-    $clauses = ['1=1'];
-    $params = [];
-
-    if (!empty($filters['resource'])) {
-        $clauses[] = 'l.resource = ?';
-        $params[] = $filters['resource'];
-    }
-    if (!empty($filters['tier'])) {
-        $clauses[] = 'l.tier = ?';
-        $params[] = $filters['tier'];
-    }
-    if (!empty($filters['status'])) {
-        if ($filters['status'] === 'error') {
-            $clauses[] = 'l.status_code >= 400';
-        } elseif ($filters['status'] === 'success') {
-            $clauses[] = 'l.status_code < 400';
-        }
-    }
-    if (!empty($filters['date_from'])) {
-        $clauses[] = 'l.created_at >= ?';
-        $params[] = $filters['date_from'] . ' 00:00:00';
-    }
-    if (!empty($filters['date_to'])) {
-        $clauses[] = 'l.created_at <= ?';
-        $params[] = $filters['date_to'] . ' 23:59:59';
-    }
-
-    return [implode(' AND ', $clauses), $params];
-}
-
 /**
- * Lista paginada de acessos à API -- traz também o rótulo/prefixo do token
- * (quando houver) via LEFT JOIN, para exibição direta na tabela do painel.
+ * Lista paginada de acessos — lê os arquivos JSON-Lines do intervalo de datas.
+ * Sem filtro de data, cobre os últimos 30 dias.
  */
 function apiAccessLogList(int $limit, int $offset, array $filters = []): array {
-    $limit = max(1, min(200, $limit));
+    $limit  = max(1, min(200, $limit));
     $offset = max(0, $offset);
-    [$where, $params] = apiAccessLogWhereClause($filters);
 
-    $sql = "SELECT l.*, t.label AS token_label, t.token_prefix AS token_prefix
-            FROM api_access_logs l
-            LEFT JOIN api_tokens t ON t.id = l.token_id
-            WHERE {$where}
-            ORDER BY l.created_at DESC, l.id DESC
-            LIMIT ? OFFSET ?";
-    $stmt = db()->prepare($sql);
-    $i = 1;
-    foreach ($params as $p) {
-        $stmt->bindValue($i++, $p);
+    $files = apiLogFilesInRange($filters['date_from'] ?? null, $filters['date_to'] ?? null);
+
+    // Agrega todas as linhas filtradas, mais recentes primeiro
+    $allRows = [];
+    foreach ($files as $f) {
+        $rows    = apiLogParseFile($f['path'], $filters);
+        $allRows = array_merge($allRows, array_reverse($rows));
     }
-    $stmt->bindValue($i++, $limit, PDO::PARAM_INT);
-    $stmt->bindValue($i++, $offset, PDO::PARAM_INT);
-    $stmt->execute();
-    return $stmt->fetchAll();
+
+    $page = array_slice($allRows, $offset, $limit);
+    if (!$page) return [];
+
+    $tokenMap = apiLogLoadTokenMap();
+    return array_map(static fn($r) => apiLogRowToDisplay($r, $tokenMap), $page);
 }
 
-/** Total de linhas que respeitam o mesmo filtro de apiAccessLogList() -- usado para paginação. */
+/** Total de registros no intervalo/filtro — usado para paginação. */
 function apiAccessLogCount(array $filters = []): int {
-    [$where, $params] = apiAccessLogWhereClause($filters);
-    $stmt = db()->prepare("SELECT COUNT(*) AS c FROM api_access_logs l WHERE {$where}");
-    $stmt->execute($params);
-    $row = $stmt->fetch();
-    return (int) ($row['c'] ?? 0);
+    $files = apiLogFilesInRange($filters['date_from'] ?? null, $filters['date_to'] ?? null);
+
+    // Se há filtro que exige inspecionar conteúdo, parseia; senão conta linhas.
+    $needsParsing = !empty($filters['resource'])
+                 || !empty($filters['tier'])
+                 || !empty($filters['status']);
+
+    $total = 0;
+    foreach ($files as $f) {
+        $total += $needsParsing
+            ? count(apiLogParseFile($f['path'], $filters))
+            : apiLogCountLines($f['path']);
+    }
+    return $total;
 }
 
-/** Valores distintos de "resource" já logados -- popula o filtro de recurso no painel. */
+/** Recursos distintos encontrados nos arquivos recentes — popula o filtro no painel. */
 function apiAccessLogDistinctResources(): array {
-    $rows = db()->query("SELECT DISTINCT resource FROM api_access_logs WHERE resource IS NOT NULL AND resource != '' ORDER BY resource ASC")->fetchAll();
-    return array_map(static function (array $r): string {
-        return (string) $r['resource'];
-    }, $rows);
+    $files     = apiLogFilesInRange(null, null);
+    $resources = [];
+    foreach ($files as $f) {
+        $fh = @fopen($f['path'], 'r');
+        if (!$fh) continue;
+        while (($line = fgets($fh)) !== false) {
+            $r = json_decode(trim($line), true);
+            if (is_array($r) && !empty($r['res'])) {
+                $resources[$r['res']] = true;
+            }
+        }
+        fclose($fh);
+    }
+    $result = array_keys($resources);
+    sort($result);
+    return $result;
 }
 
 /** Contagens rápidas para os cartões de resumo da aba "Logs de API". */
 function apiAccessLogStats(): array {
-    $pdo = db();
-    $total = (int) ($pdo->query('SELECT COUNT(*) AS c FROM api_access_logs')->fetch()['c'] ?? 0);
-    $today = (int) ($pdo->query("SELECT COUNT(*) AS c FROM api_access_logs WHERE date(created_at) = date('now')")->fetch()['c'] ?? 0);
-    $errorsToday = (int) ($pdo->query("SELECT COUNT(*) AS c FROM api_access_logs WHERE date(created_at) = date('now') AND status_code >= 400")->fetch()['c'] ?? 0);
-    return ['total' => $total, 'today' => $today, 'errors_today' => $errorsToday];
+    $dir   = apiLogDir();
+    $today = gmdate('Y-m-d');
+
+    // Total geral: conta linhas em todos os arquivos sem parsear JSON
+    $total = 0;
+    if (is_dir($dir)) {
+        foreach (glob($dir . '/*.jsonl') ?: [] as $path) {
+            $total += apiLogCountLines($path);
+        }
+    }
+
+    // Hoje: lê só o arquivo do dia para contar erros
+    $todayCount  = 0;
+    $errorsToday = 0;
+    $todayFile   = apiLogFilePath($today);
+    if (file_exists($todayFile)) {
+        $fh = @fopen($todayFile, 'r');
+        if ($fh) {
+            while (($line = fgets($fh)) !== false) {
+                $r = json_decode(trim($line), true);
+                if (!is_array($r)) continue;
+                $todayCount++;
+                if ((int) ($r['st'] ?? 200) >= 400) {
+                    $errorsToday++;
+                }
+            }
+            fclose($fh);
+        }
+    }
+
+    return ['total' => $total, 'today' => $todayCount, 'errors_today' => $errorsToday];
 }

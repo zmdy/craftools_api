@@ -51,6 +51,10 @@ $hasFilters = $filterResource !== '' || $filterTier !== '' || $filterStatus !== 
             Toda requisição feita à API pública (<code>/v1/</code>) é registrada aqui, com sucesso ou erro —
             recurso acessado, token/tier, IP, tempo de resposta e a mensagem de erro (quando houver).
             O parâmetro <code>token</code> nunca é gravado em texto puro nos logs.
+            Os registros são armazenados em arquivos <code>storage/logs/api/YYYY-MM-DD.jsonl</code> (um por dia).
+            <?php if (!$hasFilters || ($filterFrom === '' && $filterTo === '')): ?>
+                <br><strong>Sem filtro de data:</strong> exibindo os últimos 30 dias. Use os campos "De" / "Até" para consultar períodos anteriores.
+            <?php endif; ?>
         </p>
     </div>
 </div>
