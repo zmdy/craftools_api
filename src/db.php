@@ -1,11 +1,11 @@
 <?php
 /**
- * db.php — conexão PDO (SQLite) + auto-inicialização do schema.
+ * db.php — PDO (SQLite) connection + automatic schema initialisation.
  *
- * SQLite foi escolhido para o MVP por ser zero-config (sem servidor de banco
- * separado para configurar no host), suficiente para o volume de uma API de
- * catálogo + biblioteca de assets. Migrar para MySQL/Postgres no futuro exige
- * apenas troca da DSN aqui e pequenos ajustes de sintaxe no schema.sql.
+ * SQLite was chosen for the MVP because it is zero-config (no separate
+ * database server to set up on the host) and sufficient for the volume of a
+ * catalogue + asset-library API. Migrating to MySQL/Postgres in the future
+ * only requires changing the DSN here and minor syntax adjustments in schema.sql.
  */
 
 function db(): PDO {
@@ -33,10 +33,10 @@ function db(): PDO {
         $pdo->exec($schema);
         @chmod($dbPath, 0660);
     } else {
-        // Bancos já existentes (criados antes de uma tabela nova ser
-        // adicionada ao schema.sql) não re-executam o schema inteiro -- só
-        // tabelas/índices novos são garantidos aqui, via CREATE ... IF NOT
-        // EXISTS (idempotente e barato, seguro de rodar em toda requisição).
+        // Existing databases (created before a new table was added to
+        // schema.sql) do not re-run the full schema — only new tables/indexes
+        // are guaranteed here via CREATE ... IF NOT EXISTS (idempotent and
+        // cheap, safe to run on every request).
         ensureAdditiveSchema($pdo);
     }
 
@@ -44,9 +44,9 @@ function db(): PDO {
 }
 
 /**
- * Garante que tabelas adicionadas ao schema DEPOIS do banco já existir
- * também sejam criadas, sem precisar de uma migration formal. Só use
- * CREATE TABLE/INDEX IF NOT EXISTS aqui -- nunca ALTER/DROP.
+ * Ensures tables added to the schema AFTER the database already exists are
+ * also created, without requiring a formal migration. Only use
+ * CREATE TABLE/INDEX IF NOT EXISTS here — never ALTER/DROP.
  */
 function ensureAdditiveSchema(PDO $pdo): void {
     $pdo->exec("
@@ -84,15 +84,15 @@ function ensureAdditiveSchema(PDO $pdo): void {
         );
         CREATE INDEX IF NOT EXISTS idx_phrase_collection_links_collection ON phrase_collection_links(collection_id);
 
-        -- api_access_logs removida: logs gravados em storage/logs/api/YYYY-MM-DD.jsonl
-        -- Instâncias existentes: DROP TABLE IF EXISTS api_access_logs; (opcional)
+        -- api_access_logs removed: logs are written to storage/logs/api/YYYY-MM-DD.jsonl
+        -- Existing instances: DROP TABLE IF EXISTS api_access_logs; (optional)
     ");
 
-    // phrase_collections pode já existir (criada por uma versão anterior
-    // desta função, antes da coluna description existir) -- ALTER TABLE ADD
-    // COLUMN é uma operação leve e segura em SQLite (não reescreve a tabela),
-    // então é usada aqui, mas só depois de checar via PRAGMA que a coluna
-    // realmente falta (idempotente).
+    // phrase_collections may already exist (created by an earlier version of
+    // this function, before the description column was added) — ALTER TABLE ADD
+    // COLUMN is a lightweight, safe operation in SQLite (does not rewrite the
+    // table), so it is used here but only after checking via PRAGMA that the
+    // column is actually missing (idempotent).
     $cols = $pdo->query('PRAGMA table_info(phrase_collections)')->fetchAll(PDO::FETCH_ASSOC);
     $hasDescription = false;
     foreach ($cols as $col) {
@@ -106,7 +106,7 @@ function ensureAdditiveSchema(PDO $pdo): void {
     }
 }
 
-/** Gera um UUID v4 (usado como identificador público de todas as entidades). */
+/** Generates a UUID v4 (used as the public identifier for all entities). */
 function uuidv4(): string {
     $data = random_bytes(16);
     $data[6] = chr((ord($data[6]) & 0x0f) | 0x40);
@@ -116,15 +116,15 @@ function uuidv4(): string {
         . substr($hex, 16, 4) . '-' . substr($hex, 20, 12);
 }
 
-/** Timestamp UTC no formato usado pelas colunas TEXT do schema. */
+/** UTC timestamp in the format used by TEXT columns in the schema. */
 function nowSql(): string {
     return gmdate('Y-m-d H:i:s');
 }
 
 // ---------------------------------------------------------------------------
-// Helpers genéricos de acesso a dados. $table/$column SEMPRE vêm de literais
-// fixados no próprio código (nunca de input do usuário) — apenas os VALORES
-// percorrem prepared statements.
+// Generic data-access helpers. $table/$column ALWAYS come from literals
+// hard-coded in the source (never from user input) — only VALUES travel
+// through prepared statements.
 // ---------------------------------------------------------------------------
 
 function repoList(string $table, string $orderBy = 'id ASC', array $where = []): array {

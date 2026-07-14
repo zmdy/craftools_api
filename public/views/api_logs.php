@@ -1,5 +1,5 @@
 <?php
-// Não precisa de checagem adicional: index.php já garante sessão admin.
+// No additional auth check needed: index.php already enforces the admin session.
 $stats = apiAccessLogStats();
 
 $filterResource = trim((string) ($_GET['resource'] ?? ''));
@@ -25,7 +25,7 @@ $listTotalPages = max(1, (int) ceil($listTotal / $listPerPage));
 
 $distinctResources = apiAccessLogDistinctResources();
 
-// Monta a query string base (sem "lp") reaproveitada pelos links de paginação.
+// Build the base query string (without "lp") reused by pagination links.
 $baseParams = array_filter([
     'page' => 'api_logs',
     'resource' => $filterResource,
@@ -40,20 +40,20 @@ $hasFilters = $filterResource !== '' || $filterTier !== '' || $filterStatus !== 
 ?>
 
 <div class="stat-grid">
-    <div class="stat-card"><div class="stat-num"><?= number_format($stats['total'], 0, ',', '.') ?></div><div class="stat-label">Acessos registrados (total)</div></div>
-    <div class="stat-card"><div class="stat-num"><?= number_format($stats['today'], 0, ',', '.') ?></div><div class="stat-label">Acessos hoje</div></div>
-    <div class="stat-card"><div class="stat-num"><?= number_format($stats['errors_today'], 0, ',', '.') ?></div><div class="stat-label">Erros hoje</div></div>
+    <div class="stat-card"><div class="stat-num"><?= number_format($stats['total'], 0, ',', '.') ?></div><div class="stat-label">Total requests logged</div></div>
+    <div class="stat-card"><div class="stat-num"><?= number_format($stats['today'], 0, ',', '.') ?></div><div class="stat-label">Requests today</div></div>
+    <div class="stat-card"><div class="stat-num"><?= number_format($stats['errors_today'], 0, ',', '.') ?></div><div class="stat-label">Errors today</div></div>
 </div>
 
 <div class="card">
     <div class="card-body">
         <p class="text-muted" style="margin-bottom:0; line-height:1.6;">
-            Toda requisição feita à API pública (<code>/v1/</code>) é registrada aqui, com sucesso ou erro —
-            recurso acessado, token/tier, IP, tempo de resposta e a mensagem de erro (quando houver).
-            O parâmetro <code>token</code> nunca é gravado em texto puro nos logs.
-            Os registros são armazenados em arquivos <code>storage/logs/api/YYYY-MM-DD.jsonl</code> (um por dia).
+            Every request to the public API (<code>/v1/</code>) is logged here, whether successful or not —
+            resource accessed, token/tier, IP, response time, and error message (if any).
+            The <code>token</code> parameter is never stored in plain text in the logs.
+            Records are stored in daily files: <code>storage/logs/api/YYYY-MM-DD.jsonl</code>.
             <?php if (!$hasFilters || ($filterFrom === '' && $filterTo === '')): ?>
-                <br><strong>Sem filtro de data:</strong> exibindo os últimos 30 dias. Use os campos "De" / "Até" para consultar períodos anteriores.
+                <br><strong>No date filter:</strong> showing the last 30 days. Use the "From" / "To" fields to query earlier periods.
             <?php endif; ?>
         </p>
     </div>
@@ -61,15 +61,15 @@ $hasFilters = $filterResource !== '' || $filterTier !== '' || $filterStatus !== 
 
 <div class="card">
     <div class="card-head">
-        <h2>Acessos (<?= number_format($listTotal, 0, ',', '.') ?>)</h2>
+        <h2>Requests (<?= number_format($listTotal, 0, ',', '.') ?>)</h2>
     </div>
     <div class="card-body">
         <form method="get" action="index.php" class="field-row" style="align-items:flex-end; flex-wrap:wrap;">
             <input type="hidden" name="page" value="api_logs">
             <div class="field">
-                <label>Recurso</label>
+                <label>Resource</label>
                 <select name="resource">
-                    <option value="">Todos</option>
+                    <option value="">All</option>
                     <?php foreach ($distinctResources as $r): ?>
                         <option value="<?= e($r) ?>" <?= $filterResource === $r ? 'selected' : '' ?>><?= e($r) ?></option>
                     <?php endforeach; ?>
@@ -78,7 +78,7 @@ $hasFilters = $filterResource !== '' || $filterTier !== '' || $filterStatus !== 
             <div class="field">
                 <label>Tier</label>
                 <select name="tier">
-                    <option value="">Todos</option>
+                    <option value="">All</option>
                     <?php foreach (['free', 'plus', 'premium'] as $t): ?>
                         <option value="<?= $t ?>" <?= $filterTier === $t ? 'selected' : '' ?>><?= ucfirst($t) ?></option>
                     <?php endforeach; ?>
@@ -87,22 +87,22 @@ $hasFilters = $filterResource !== '' || $filterTier !== '' || $filterStatus !== 
             <div class="field">
                 <label>Status</label>
                 <select name="status">
-                    <option value="">Todos</option>
-                    <option value="success" <?= $filterStatus === 'success' ? 'selected' : '' ?>>Sucesso</option>
-                    <option value="error" <?= $filterStatus === 'error' ? 'selected' : '' ?>>Erro</option>
+                    <option value="">All</option>
+                    <option value="success" <?= $filterStatus === 'success' ? 'selected' : '' ?>>Success</option>
+                    <option value="error" <?= $filterStatus === 'error' ? 'selected' : '' ?>>Error</option>
                 </select>
             </div>
             <div class="field">
-                <label>De</label>
+                <label>From</label>
                 <input type="date" name="from" value="<?= e($filterFrom) ?>">
             </div>
             <div class="field">
-                <label>Até</label>
+                <label>To</label>
                 <input type="date" name="to" value="<?= e($filterTo) ?>">
             </div>
-            <button type="submit" class="btn btn-outline btn-sm">Filtrar</button>
+            <button type="submit" class="btn btn-outline btn-sm">Filter</button>
             <?php if ($hasFilters): ?>
-                <a href="index.php?page=api_logs" class="btn btn-outline btn-sm">Limpar filtro</a>
+                <a href="index.php?page=api_logs" class="btn btn-outline btn-sm">Clear filter</a>
             <?php endif; ?>
         </form>
     </div>
@@ -110,19 +110,19 @@ $hasFilters = $filterResource !== '' || $filterTier !== '' || $filterStatus !== 
         <table class="data-table">
             <thead>
                 <tr>
-                    <th>Data/Hora (UTC)</th>
-                    <th>Recurso</th>
-                    <th>Modo</th>
+                    <th>Date/Time (UTC)</th>
+                    <th>Resource</th>
+                    <th>Mode</th>
                     <th>Tier</th>
                     <th>Token</th>
                     <th>Status</th>
                     <th>IP</th>
-                    <th>Duração</th>
+                    <th>Duration</th>
                 </tr>
             </thead>
             <tbody>
             <?php if (!$listRows): ?>
-                <tr class="empty-row"><td colspan="8">Nenhum acesso registrado<?= $hasFilters ? ' para este filtro' : '' ?>.</td></tr>
+                <tr class="empty-row"><td colspan="8">No requests logged<?= $hasFilters ? ' for this filter' : '' ?>.</td></tr>
             <?php endif; ?>
             <?php foreach ($listRows as $row): ?>
                 <?php $isError = (int) $row['status_code'] >= 400; ?>
@@ -149,9 +149,9 @@ $hasFilters = $filterResource !== '' || $filterTier !== '' || $filterStatus !== 
     </div>
     <?php if ($listTotalPages > 1): ?>
     <div class="card-body d-flex" style="justify-content:center; gap:6px; align-items:center; border-top:1px solid var(--border);">
-        <a href="index.php?<?= $baseQs ?>&lp=<?= max(1, $listPage - 1) ?>" class="btn btn-outline btn-sm" <?= $listPage <= 1 ? 'style="pointer-events:none;opacity:.4;"' : '' ?>>Anterior</a>
-        <span class="text-muted" style="font-size:12.5px;">Página <?= $listPage ?> de <?= $listTotalPages ?></span>
-        <a href="index.php?<?= $baseQs ?>&lp=<?= min($listTotalPages, $listPage + 1) ?>" class="btn btn-outline btn-sm" <?= $listPage >= $listTotalPages ? 'style="pointer-events:none;opacity:.4;"' : '' ?>>Próxima</a>
+        <a href="index.php?<?= $baseQs ?>&lp=<?= max(1, $listPage - 1) ?>" class="btn btn-outline btn-sm" <?= $listPage <= 1 ? 'style="pointer-events:none;opacity:.4;"' : '' ?>>Previous</a>
+        <span class="text-muted" style="font-size:12.5px;">Page <?= $listPage ?> of <?= $listTotalPages ?></span>
+        <a href="index.php?<?= $baseQs ?>&lp=<?= min($listTotalPages, $listPage + 1) ?>" class="btn btn-outline btn-sm" <?= $listPage >= $listTotalPages ? 'style="pointer-events:none;opacity:.4;"' : '' ?>>Next</a>
     </div>
     <?php endif; ?>
 </div>
