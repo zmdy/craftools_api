@@ -1,12 +1,12 @@
 <?php
 /**
- * repo.php — funções de acesso a dados por entidade. Toda escrita usa
- * prepared statements (via os helpers genéricos de db.php); nenhuma consulta
- * monta valores de input diretamente na string SQL.
+ * repo.php — per-entity data-access functions. All writes use prepared
+ * statements (via the generic helpers in db.php); no query builds input
+ * values directly into the SQL string.
  */
 
 // ============================================================================
-// app_users — clientes do CraftTools+ ("cadastrar os usuários")
+// app_users — CraftTools+ subscribers ("register users")
 // ============================================================================
 
 function appUserList(): array {
@@ -67,7 +67,7 @@ function apiTokenFind(int $id): ?array {
     return repoFind('api_tokens', $id);
 }
 
-/** Cria um token e retorna o valor em texto puro (única vez que ele existe em claro). */
+/** Creates a token and returns its plain-text value (the only time it exists in clear). */
 function apiTokenCreate(?int $userId, string $label, string $tier, ?string $expiresAt): array {
     $gen = generateApiTokenValue();
     $id = repoInsert('api_tokens', [
@@ -185,7 +185,7 @@ function jsonLinesToArrayJson(string $text): string {
 }
 
 // ============================================================================
-// album_templates — conceito novo (cliente ainda não consome via API)
+// album_templates — new concept (client does not yet consume via API)
 // ============================================================================
 
 function albumTemplateList(): array {
@@ -254,8 +254,8 @@ function albumTemplateRowFromInput(array $d): array {
 // ============================================================================
 
 function phraseList(?string $filterCategory = null, ?string $filterAuthor = null, ?string $filterCollection = null): array {
-    // LEFT JOIN só para trazer o nome da coleção (se houver) junto de cada
-    // frase -- exibido na listagem do painel admin.
+    // LEFT JOIN only to bring the collection name (if any) alongside each
+    // phrase — displayed in the admin panel listing.
     $sql = "SELECT phrases.*, pc.name AS collection_name
             FROM phrases
             LEFT JOIN phrase_collection_links l ON l.phrase_id = phrases.id
@@ -263,7 +263,7 @@ function phraseList(?string $filterCategory = null, ?string $filterAuthor = null
             WHERE 1=1";
     $params = [];
     if ($filterCategory !== null && $filterCategory !== '') {
-        // category é CSV: "amor,motivacional" — busca categoria exata dentro do vetor
+        // category is CSV: "amor,motivacional" — exact category search within the vector
         $sql .= " AND (',' || phrases.category || ',' LIKE ?)";
         $params[] = '%,' . $filterCategory . ',%';
     }
@@ -293,7 +293,7 @@ function phraseListActiveForTier(string $tier, ?string $category = null, ?string
     $sql = 'SELECT * FROM phrases WHERE active = 1';
     $params = [];
     if ($category !== null && $category !== '') {
-        // suporta múltiplas categorias armazenadas como CSV
+        // supports multiple categories stored as CSV
         $sql .= " AND (',' || category || ',' LIKE ?)";
         $params[] = '%,' . $category . ',%';
     }
@@ -302,8 +302,8 @@ function phraseListActiveForTier(string $tier, ?string $category = null, ?string
         $params[] = $language;
     }
     if ($collection !== null && $collection !== '') {
-        // Coleção é o filtro de "1º nível" (tema/conjunto); category/author
-        // continuam sendo o filtro de "2º nível", aplicado sobre este resultado.
+        // Collection is the "1st-level" filter (theme/set); category/author
+        // remain the "2nd-level" filter, applied on top of this result.
         $sql .= ' AND id IN (
             SELECT l.phrase_id FROM phrase_collection_links l
             INNER JOIN phrase_collections pc ON pc.id = l.collection_id
@@ -351,13 +351,13 @@ function phraseDelete(int $id): void {
 }
 
 /**
- * Aplica alterações em massa a um conjunto de frases (tier, idioma, categoria
- * e/ou coleção) -- usado pela ação "Aplicar" da seleção múltipla no painel
- * admin. Cada campo em $changes é opcional; só os informados são alterados
- * (mesmo valor para todas as frases dos $ids informados).
+ * Applies bulk changes to a set of phrases (tier, language, category
+ * and/or collection) — used by the "Apply" action in the multi-select panel.
+ * Each field in $changes is optional; only provided fields are changed
+ * (same value applied to all phrases in $ids).
  * @param int[] $ids
  * @param array{tier?:string, language?:string, category?:string, collection?:string} $changes
- * @return int quantidade de frases efetivamente atualizadas
+ * @return int number of phrases actually updated
  */
 function phraseBulkUpdate(array $ids, array $changes): int {
     $ids = array_values(array_unique(array_filter(array_map('intval', $ids), fn($v) => $v > 0)));
@@ -391,8 +391,8 @@ function phraseBulkUpdate(array $ids, array $changes): int {
         $count = $stmt->rowCount();
     }
 
-    // Coleção é tratada à parte (tabela de vínculo, não coluna de phrases).
-    // '' explícito = remove a coleção; ausência da chave = não mexe na coleção.
+    // Collection is handled separately (link table, not a column of phrases).
+    // Explicit '' = remove the collection; absent key = leave the collection unchanged.
     if (array_key_exists('collection', $changes)) {
         $collectionId = $changes['collection'] !== '' ? phraseCollectionFindOrCreateByName($changes['collection']) : null;
         foreach ($ids as $id) {
@@ -454,12 +454,12 @@ function phraseAuthors(): array {
 }
 
 // ============================================================================
-// phrase_collections / phrase_collection_links — agrupamento de frases por
-// tema/conjunto (ex.: "Ano Novo 2026", "Poemas de Amor"), independente de
-// category/author (que são atributos livres da própria frase).
+// phrase_collections / phrase_collection_links — grouping of phrases by
+// theme/set (e.g. "New Year 2026", "Love Poems"), independent of
+// category/author (which are free attributes of the phrase itself).
 // ============================================================================
 
-/** Lista coleções (com contagem de frases vinculadas) -- usado pelo painel admin. */
+/** Lists collections (with linked phrase count) — used by the admin panel. */
 function phraseCollectionList(): array {
     return db()->query(
         "SELECT pc.*, (SELECT COUNT(*) FROM phrase_collection_links l WHERE l.collection_id = pc.id) AS phrase_count
@@ -468,7 +468,7 @@ function phraseCollectionList(): array {
     )->fetchAll();
 }
 
-/** Só os nomes das coleções ativas -- usado para popular selects/datalists (admin e API pública). */
+/** Only the names of active collections — used to populate selects/datalists (admin and public API). */
 function phraseCollectionNames(): array {
     $rows = db()->query("SELECT name FROM phrase_collections WHERE active = 1 ORDER BY sort_order ASC, name ASC")->fetchAll();
     return array_column($rows, 'name');
@@ -478,7 +478,7 @@ function phraseCollectionFind(int $id): ?array {
     return repoFind('phrase_collections', $id);
 }
 
-/** Busca uma coleção pelo nome (case-insensitive). */
+/** Looks up a collection by name (case-insensitive). */
 function phraseCollectionFindByName(string $name): ?array {
     $stmt = db()->prepare('SELECT * FROM phrase_collections WHERE name = ? COLLATE NOCASE LIMIT 1');
     $stmt->execute([trim($name)]);
@@ -487,9 +487,9 @@ function phraseCollectionFindByName(string $name): ?array {
 }
 
 /**
- * Retorna o id da coleção com este nome, criando-a se ainda não existir.
- * Usado pelo import CSV e pelo cadastro manual de frases -- o usuário só
- * "escolhe ou digita" o nome, sem precisar de uma tela de CRUD separada.
+ * Returns the id of the collection with this name, creating it if it does not exist.
+ * Used by CSV import and manual phrase entry — the user only "picks or types"
+ * the name, without needing a separate CRUD screen.
  */
 function phraseCollectionFindOrCreateByName(string $name): ?int {
     $name = trim($name);
@@ -510,7 +510,7 @@ function phraseCollectionFindOrCreateByName(string $name): ?int {
     ]);
 }
 
-/** Cria uma coleção com nome + descrição -- usado pela tela de gerenciamento de coleções. */
+/** Creates a collection with a name + description — used by the collection management screen. */
 function phraseCollectionCreate(string $name, string $description = ''): int {
     return repoInsert('phrase_collections', [
         'uuid'        => uuidv4(),
@@ -533,10 +533,10 @@ function phraseCollectionUpdate(int $id, string $name, string $description = '',
 }
 
 function phraseCollectionDelete(int $id): void {
-    repoDelete('phrase_collections', $id); // ON DELETE CASCADE remove só os vínculos, não as frases
+    repoDelete('phrase_collections', $id); // ON DELETE CASCADE removes only the links, not the phrases
 }
 
-/** Substitui o vínculo de coleção de uma frase (hoje usado como 0..1 coleção por frase). */
+/** Replaces the collection link for a phrase (currently used as 0..1 collection per phrase). */
 function phraseSetCollection(int $phraseId, ?int $collectionId): void {
     db()->prepare('DELETE FROM phrase_collection_links WHERE phrase_id = ?')->execute([$phraseId]);
     if ($collectionId !== null) {
@@ -545,7 +545,7 @@ function phraseSetCollection(int $phraseId, ?int $collectionId): void {
     }
 }
 
-/** Retorna a coleção vinculada a uma frase (ou null se nenhuma). */
+/** Returns the collection linked to a phrase (or null if none). */
 function phraseCollectionForPhrase(int $phraseId): ?array {
     $stmt = db()->prepare(
         'SELECT pc.* FROM phrase_collections pc
@@ -598,7 +598,7 @@ function emojiKitchenUpsertBatch(array $items): int {
             $stmt->execute([uuidv4(), $leftEmoji, $rightEmoji, $leftCp, $rightCp, $imageUrl, $isLatest, 'free', nowSql()]);
             $count++;
         } catch (Throwable $e) {
-            // Item malformado isolado não deve derrubar o lote inteiro.
+            // A single malformed item must not abort the entire batch.
             continue;
         }
     }
@@ -619,7 +619,7 @@ function emojiKitchenFindCombo(string $left, string $right): ?array {
     return $row !== false ? $row : null;
 }
 
-/** Emojis que têm ao menos 1 combo real cadastrado com o emoji dado (em qualquer ordem). */
+/** Emojis that have at least 1 registered combo with the given emoji (in either order). */
 function emojiKitchenPartners(string $emoji): array {
     $stmt = db()->prepare(
         "SELECT DISTINCT right_emoji AS partner FROM emoji_kitchen_combos WHERE active = 1 AND left_emoji = ?
@@ -651,10 +651,10 @@ function emojiKitchenCount(): int {
 }
 
 /**
- * Lista paginada de combos cadastrados -- usada pelo painel admin (tabela de
- * navegação) e pela API pública (?resource=emoji-kitchen&mode=list).
- * $filterEmoji, quando informado, restringe aos combos em que o emoji aparece
- * de qualquer lado (left_emoji OU right_emoji).
+ * Paginated list of registered combos — used by the admin panel (navigation
+ * table) and the public API (?resource=emoji-kitchen&mode=list).
+ * $filterEmoji, when provided, restricts to combos where the emoji appears
+ * on either side (left_emoji OR right_emoji).
  */
 function emojiKitchenList(int $limit = 50, int $offset = 0, ?string $filterEmoji = null): array {
     $limit = max(1, min(500, $limit));
@@ -677,7 +677,7 @@ function emojiKitchenList(int $limit = 50, int $offset = 0, ?string $filterEmoji
     return $stmt->fetchAll();
 }
 
-/** Total de combos que respeitam o mesmo filtro de emojiKitchenList() -- usado para paginação. */
+/** Total combos matching the same filter as emojiKitchenList() — used for pagination. */
 function emojiKitchenListCount(?string $filterEmoji = null): int {
     $sql = 'SELECT COUNT(*) AS c FROM emoji_kitchen_combos WHERE active = 1';
     $params = [];
@@ -710,10 +710,10 @@ function assetCollectionFindByUuid(string $uuid): ?array {
 }
 
 /**
- * Busca uma coleção pelo seu original_path (ex.: "assets/original/backgrounds/praia").
- * Usado pela importação em massa para reaproveitar a coleção já criada em uma
- * chamada anterior, já que o processamento acontece em lotes (várias
- * requisições AJAX sequenciais) em vez de uma única requisição síncrona.
+ * Looks up a collection by its original_path (e.g. "assets/original/backgrounds/beach").
+ * Used by bulk import to reuse a collection already created in a previous call,
+ * since processing happens in batches (multiple sequential AJAX requests)
+ * rather than a single synchronous request.
  */
 function assetCollectionFindByOriginalPath(string $originalPath): ?array {
     $stmt = db()->prepare('SELECT * FROM asset_collections WHERE original_path = ? LIMIT 1');
@@ -749,7 +749,7 @@ function assetCollectionUpdate(int $id, array $d): void {
 }
 
 function assetCollectionDelete(int $id): void {
-    repoDelete('asset_collections', $id); // ON DELETE CASCADE remove as imagens da coleção
+    repoDelete('asset_collections', $id); // ON DELETE CASCADE removes the collection's images
 }
 
 function assetImagesByCollection(int $collectionId): array {
@@ -795,10 +795,10 @@ function assetImageDelete(int $id): void {
  * Monta a resposta no formato consumido por ApiPicker.js / craftools_api
  * legado: [{id, comment, original_path, tier, images:[{id, api_url, comment, tier}]}].
  *
- * Regra de visibilidade (generaliza filterByTier() do projeto legado para os
- * 3 tiers): uma coleção só aparece se o tier do requisitante for >= tier da
- * coleção; dentro de coleções visíveis, cada imagem é filtrada da mesma forma
- * pelo seu próprio tier.
+ * Visibility rule (generalises filterByTier() from the legacy project to
+ * 3 tiers): a collection only appears if the requester's tier is >= the
+ * collection's tier; within visible collections, each image is filtered
+ * the same way by its own tier.
  */
 function assetCollectionsForApi(string $tier, ?string $typeFilter = null, ?string $onlyUuid = null): array {
     $sql = 'SELECT * FROM asset_collections WHERE active = 1';
@@ -832,9 +832,9 @@ function assetCollectionsForApi(string $tier, ?string $typeFilter = null, ?strin
             }
             $images[] = [
                 'id' => $img['uuid'],
-                // ApiPicker.js monta a URL final como `${API_BASE}${api_url}` — precisa
-                // da barra inicial. file_path é salvo sem barra (bulk_import, image_upload,
-                // migrate_legacy.php), então ela é adicionada aqui, no único ponto de saída.
+                // ApiPicker.js builds the final URL as `${API_BASE}${api_url}` — needs
+                // the leading slash. file_path is saved without a slash (bulk_import,
+                // image_upload, migrate_legacy.php), so it is added here, the single exit point.
                 'api_url' => '/' . ltrim((string) $img['file_path'], '/'),
                 'comment' => (string) $img['comment'],
                 'tier' => $img['tier'],
@@ -853,7 +853,7 @@ function assetCollectionsForApi(string $tier, ?string $typeFilter = null, ?strin
 }
 
 // ============================================================================
-// Dashboard — contagens rápidas
+// Dashboard — quick counts
 // ============================================================================
 
 function dashboardCounts(): array {
@@ -873,18 +873,18 @@ function dashboardCounts(): array {
 }
 
 // ============================================================================
-// api_access_logs (JSON-Lines) — 1 arquivo por dia em storage/logs/api/.
-// Cada linha é um objeto JSON com os campos da requisição. O banco de dados
-// NÃO é mais usado para logs de acesso — a tabela api_access_logs para de
-// crescer e pode ser removida manualmente quando conveniente:
+// api_access_logs (JSON-Lines) — 1 file per day in storage/logs/api/.
+// Each line is a JSON object with the request fields. The database is
+// NO LONGER used for access logs — the api_access_logs table stops
+// growing and can be removed manually when convenient:
 //   sqlite3 craftools.db "DROP TABLE IF EXISTS api_access_logs;"
 // ============================================================================
 
 /**
- * Remove o valor do parâmetro "token" de uma query string antes de guardá-la
- * no log -- o token dá acesso à API, então nunca deve ser persistido em texto
- * puro em lugar nenhum (mesma cautela já aplicada a api_tokens/upload_links,
- * que só guardam o hash SHA-256).
+ * Removes the "token" parameter value from a query string before storing it
+ * in the log — the token grants API access, so it must never be persisted in
+ * plain text anywhere (same caution already applied to api_tokens/upload_links,
+ * which store only the SHA-256 hash).
  */
 function redactApiQueryString(string $queryString): string {
     if ($queryString === '') {
@@ -895,18 +895,18 @@ function redactApiQueryString(string $queryString): string {
 
 // ── Helpers internos de arquivo ───────────────────────────────────────────────
 
-/** Diretório base dos arquivos de log diários. */
+/** Base directory for daily log files. */
 function apiLogDir(): string {
     return CRAFTOOLS_API_ROOT . '/storage/logs/api';
 }
 
-/** Caminho completo para o .jsonl de uma data (YYYY-MM-DD). */
+/** Full path to the .jsonl file for a given date (YYYY-MM-DD). */
 function apiLogFilePath(string $date): string {
     return apiLogDir() . '/' . $date . '.jsonl';
 }
 
 /**
- * Conta linhas de um arquivo sem parsear JSON — rápido para totais globais.
+ * Counts lines in a file without parsing JSON — fast for global totals.
  */
 function apiLogCountLines(string $path): int {
     $count = 0;
@@ -920,8 +920,8 @@ function apiLogCountLines(string $path): int {
 }
 
 /**
- * Retorna os arquivos .jsonl existentes no intervalo de datas, do mais recente
- * para o mais antigo. Sem filtro de data, cobre os últimos 30 dias.
+ * Returns existing .jsonl files in the date range, newest first.
+ * Without a date filter, covers the last 30 days.
  */
 function apiLogFilesInRange(?string $dateFrom, ?string $dateTo): array {
     $dir = apiLogDir();
@@ -945,8 +945,8 @@ function apiLogFilesInRange(?string $dateFrom, ?string $dateTo): array {
 }
 
 /**
- * Lê um .jsonl e retorna as linhas que passam nos filtros resource/tier/status.
- * Resultado em ordem cronológica ascendente (como está no arquivo).
+ * Reads a .jsonl file and returns the lines that pass the resource/tier/status filters.
+ * Result is in ascending chronological order (as stored in the file).
  */
 function apiLogParseFile(string $path, array $filters): array {
     $fh = @fopen($path, 'r');
@@ -1011,11 +1011,11 @@ function apiLogLoadTokenMap(): array {
     return $map;
 }
 
-// ── Funções públicas (mesma assinatura de antes — api_logs.php não precisa mudar) ──
+// ── Public functions (same signature as before — api_logs.php needs no changes) ──
 
 /**
- * Grava 1 acesso à API pública no arquivo JSON-Lines do dia (UTC).
- * Nunca deixa uma falha de log derrubar a resposta real da API.
+ * Records 1 public API access in the day's JSON-Lines file (UTC).
+ * Never lets a log failure abort the actual API response.
  */
 function apiAccessLogRecord(array $data): void {
     try {
@@ -1052,8 +1052,8 @@ function apiAccessLogRecord(array $data): void {
 }
 
 /**
- * Lista paginada de acessos — lê os arquivos JSON-Lines do intervalo de datas.
- * Sem filtro de data, cobre os últimos 30 dias.
+ * Paginated list of requests — reads JSON-Lines files in the date range.
+ * Without a date filter, covers the last 30 days.
  */
 function apiAccessLogList(int $limit, int $offset, array $filters = []): array {
     $limit  = max(1, min(200, $limit));
@@ -1061,7 +1061,7 @@ function apiAccessLogList(int $limit, int $offset, array $filters = []): array {
 
     $files = apiLogFilesInRange($filters['date_from'] ?? null, $filters['date_to'] ?? null);
 
-    // Agrega todas as linhas filtradas, mais recentes primeiro
+    // Aggregate all filtered lines, most recent first
     $allRows = [];
     foreach ($files as $f) {
         $rows    = apiLogParseFile($f['path'], $filters);
@@ -1075,11 +1075,11 @@ function apiAccessLogList(int $limit, int $offset, array $filters = []): array {
     return array_map(static fn($r) => apiLogRowToDisplay($r, $tokenMap), $page);
 }
 
-/** Total de registros no intervalo/filtro — usado para paginação. */
+/** Total records in the date range/filter — used for pagination. */
 function apiAccessLogCount(array $filters = []): int {
     $files = apiLogFilesInRange($filters['date_from'] ?? null, $filters['date_to'] ?? null);
 
-    // Se há filtro que exige inspecionar conteúdo, parseia; senão conta linhas.
+    // If a filter requires inspecting content, parse; otherwise just count lines.
     $needsParsing = !empty($filters['resource'])
                  || !empty($filters['tier'])
                  || !empty($filters['status']);
@@ -1093,7 +1093,7 @@ function apiAccessLogCount(array $filters = []): int {
     return $total;
 }
 
-/** Recursos distintos encontrados nos arquivos recentes — popula o filtro no painel. */
+/** Distinct resources found in recent files — populates the filter dropdown in the panel. */
 function apiAccessLogDistinctResources(): array {
     $files     = apiLogFilesInRange(null, null);
     $resources = [];
@@ -1113,12 +1113,12 @@ function apiAccessLogDistinctResources(): array {
     return $result;
 }
 
-/** Contagens rápidas para os cartões de resumo da aba "Logs de API". */
+/** Quick counts for the summary cards on the "API Logs" tab. */
 function apiAccessLogStats(): array {
     $dir   = apiLogDir();
     $today = gmdate('Y-m-d');
 
-    // Total geral: conta linhas em todos os arquivos sem parsear JSON
+    // Grand total: count lines across all files without parsing JSON
     $total = 0;
     if (is_dir($dir)) {
         foreach (glob($dir . '/*.jsonl') ?: [] as $path) {
@@ -1126,7 +1126,7 @@ function apiAccessLogStats(): array {
         }
     }
 
-    // Hoje: lê só o arquivo do dia para contar erros
+    // Today: read only today's file to count errors
     $todayCount  = 0;
     $errorsToday = 0;
     $todayFile   = apiLogFilePath($today);
