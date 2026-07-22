@@ -1147,3 +1147,218 @@ function apiAccessLogStats(): array {
 
     return ['total' => $total, 'today' => $todayCount, 'errors_today' => $errorsToday];
 }
+
+// ============================================================================
+// calendar_entries — feriados / comemorações / santos / eventos históricos
+// ============================================================================
+
+const CALENDAR_ENTRY_CATEGORIES = ['holiday', 'commemoration', 'saint', 'event'];
+const CALENDAR_ENTRY_SCOPES     = ['national', 'state', 'municipal'];
+
+/** Mapa categoria interna (EN) -> chave usada na resposta agrupada da API pública (PT-BR, como pedido). */
+const CALENDAR_ENTRY_API_GROUPS = [
+    'holiday'       => 'feriados',
+    'commemoration' => 'comemoracoes',
+    'saint'         => 'santos',
+    'event'         => 'eventos',
+];
+
+function calendarEntryList(?string $filterCategory = null, ?int $filterMonth = null, ?int $filterDay = null, ?string $filterSource = null): array {
+    $sql = 'SELECT * FROM calendar_entries WHERE 1=1';
+    $params = [];
+    if ($filterCategory !== null && $filterCategory !== '') {
+        $sql .= ' AND category = ?';
+        $params[] = $filterCategory;
+    }
+    if ($filterMonth !== null) {
+        $sql .= ' AND month = ?';
+        $params[] = $filterMonth;
+    }
+    if ($filterDay !== null) {
+        $sql .= ' AND day = ?';
+        $params[] = $filterDay;
+    }
+    if ($filterSource !== null && $filterSource !== '') {
+        $sql .= ' AND source = ?';
+        $params[] = $filterSource;
+    }
+    $sql .= ' ORDER BY month ASC, day ASC, category ASC, sort_order ASC, id DESC';
+    $stmt = db()->prepare($sql);
+    $stmt->execute($params);
+    return $stmt->fetchAll();
+}
+
+function calendarEntryFind(int $id): ?array {
+    return repoFind('calendar_entries', $id);
+}
+
+function calendarEntryCreate(array $d): int {
+    return repoInsert('calendar_entries', calendarEntryRowFromInput($d) + ['created_at' => nowSql(), 'updated_at' => nowSql()]);
+}
+
+function calendarEntryUpdate(int $id, array $d): void {
+    $row = calendarEntryRowFromInput($d);
+    unset($row['uuid']);
+    repoUpdate('calendar_entries', $id, $row + ['updated_at' => nowSql()]);
+}
+
+function calendarEntryDelete(int $id): void {
+    repoDelete('calendar_entries', $id);
+}
+
+/**
+ * Normaliza o input do form/CSV/importador em uma linha pronta para
+ * repoInsert/repoUpdate. Campos que não se aplicam à categoria informada
+ * (ex.: year para holiday, holiday_scope para saint) são sempre gravados
+ * como NULL -- evita lixo de categoria trocada ficar "fantasma" na linha
+ * depois de uma edição que mude a categoria.
+ */
+function calendarEntryRowFromInput(array $d): array {
+    $category = in_array($d['category'] ?? '', CALENDAR_ENTRY_CATEGORIES, true) ? $d['category'] : 'commemoration';
+    $month = max(1, min(12, (int) ($d['month'] ?? 0)));
+    $day   = max(1, min(31, (int) ($d['day'] ?? 0)));
+
+    $year = null;
+    if ($category === 'event' && isset($d['year']) && $d['year'] !== '') {
+        $year = (int) $d['year'];
+    }
+
+    $link = null;
+    if (in_array($category, ['saint'], true) && !empty($d['link'])) {
+        $link = trim((string) $d['link']);
+    }
+
+    $scope = null;
+    $uf = null;
+    $city = null;
+    if ($category === 'holiday') {
+        $scope = in_array($d['holiday_scope'] ?? '', CALENDAR_ENTRY_SCOPES, true) ? $d['holiday_scope'] : 'national';
+        if ($scope === 'state' || $scope === 'municipal') {
+            $uf = strtoupper(trim((string) ($d['uf'] ?? ''))) ?: null;
+        }
+        if ($scope === 'municipal') {
+            $city = trim((string) ($d['city'] ?? '')) ?: null;
+        }
+    }
+
+    return [
+        'uuid'          => $d['uuid'] ?? uuidv4(),
+        'category'      => $category,
+        'month'         => $month,
+        'day'           => $day,
+        'year'          => $year,
+        'title'         => trim((string) ($d['title'] ?? '')),
+        'description'   => trim((string) ($d['description'] ?? '')) ?: null,
+        'link'          => $link,
+        'holiday_scope' => $scope,
+        'uf'            => $uf,
+        'city'          => $city,
+        'source'        => trim((string) ($d['source'] ?? '')) ?: null,
+        'tier'          => in_array($d['tier'] ?? '', ['free', 'plus', 'premium'], true) ? $d['tier'] : 'free',
+        'sort_order'    => (int) ($d['sort_order'] ?? 0),
+        'active'        => !empty($d['active']) ? 1 : 0,
+    ];
+}
+
+/** Formato exposto pela API pública -- nunca inclui id interno, só uuid. */
+function calendarEntryToApiShape(array $row): array {
+    $shape = [
+        'id'    => $row['uuid'],
+        'title' => $row['title'],
+    ];
+    if (!empty($row['description'])) {
+        $shape['description'] = $row['description'];
+    }
+    if ($row['category'] === 'event' && $row['year'] !== null) {
+        $shape['year'] = (int) $row['year'];
+    }
+    if ($row['category'] === 'saint' && !empty($row['link'])) {
+        $shape['link'] = $row['link'];
+    }
+    if ($row['category'] === 'holiday') {
+        $shape['scope'] = $row['holiday_scope'] ?? 'national';
+        if (!empty($row['uf'])) {
+            $shape['uf'] = $row['uf'];
+        }
+        if (!empty($row['city'])) {
+            $shape['city'] = $row['city'];
+        }
+    }
+    return $shape;
+}
+
+/**
+ * Consulta principal da API pública: tudo cadastrado para um mês/dia,
+ * filtrado por tier e agrupado nas 4 categorias pedidas (chaves em PT-BR,
+ * já que é o vocabulário do domínio -- feriados/comemoracoes/santos/eventos).
+ */
+function calendarEntryForDate(string $tier, int $month, int $day): array {
+    $stmt = db()->prepare(
+        'SELECT * FROM calendar_entries WHERE active = 1 AND month = ? AND day = ?
+         ORDER BY category ASC, sort_order ASC, id ASC'
+    );
+    $stmt->execute([$month, $day]);
+
+    $out = ['feriados' => [], 'comemoracoes' => [], 'santos' => [], 'eventos' => []];
+    foreach ($stmt->fetchAll() as $row) {
+        if (!tierAtLeast($tier, $row['tier'])) {
+            continue;
+        }
+        $group = CALENDAR_ENTRY_API_GROUPS[$row['category']] ?? null;
+        if ($group === null) {
+            continue;
+        }
+        $out[$group][] = calendarEntryToApiShape($row);
+    }
+    return $out;
+}
+
+/**
+ * Substitui em bloco todos os registros de uma categoria+data vindos de uma
+ * fonte específica (ex.: "apicdata.biduinfo.com.br") -- usada pelo importador
+ * de dados de exemplo da API externa, que pode ser rodado mais de uma vez
+ * para a mesma data sem acumular duplicatas. Cadastros manuais/CSV (source
+ * diferente) nunca são tocados por esta função.
+ * @param array<int,array{title:string,year?:int|null,link?:string|null}> $items
+ * @return int quantidade de itens inseridos
+ */
+function calendarEntryReplaceFromSource(string $category, int $month, int $day, string $source, array $items): int {
+    $pdo = db();
+    $pdo->beginTransaction();
+    try {
+        $del = $pdo->prepare('DELETE FROM calendar_entries WHERE category = ? AND month = ? AND day = ? AND source = ?');
+        $del->execute([$category, $month, $day, $source]);
+
+        $count = 0;
+        foreach ($items as $item) {
+            $title = trim((string) ($item['title'] ?? ''));
+            if ($title === '') {
+                continue;
+            }
+            calendarEntryCreate([
+                'category' => $category,
+                'month'    => $month,
+                'day'      => $day,
+                'year'     => $item['year'] ?? null,
+                'title'    => $title,
+                'link'     => $item['link'] ?? null,
+                'source'   => $source,
+                'tier'     => 'free',
+                'active'   => 1,
+            ]);
+            $count++;
+        }
+
+        $pdo->commit();
+        return $count;
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        throw $e;
+    }
+}
+
+/** Distinct sources cadastradas -- usado pelo painel admin para filtro/feedback do importador externo. */
+function calendarEntrySources(): array {
+    $rows = db()->query("SELECT DISTINCT source FROM calendar_entries WHERE source IS NOT NULL AND source <> '' ORDER BY source")->fetchAll();
+    return array_column($rows, 'source');
+}

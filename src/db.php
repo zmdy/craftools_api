@@ -86,6 +86,30 @@ function ensureAdditiveSchema(PDO $pdo): void {
 
         -- api_access_logs removida: logs gravados em storage/logs/api/YYYY-MM-DD.jsonl
         -- Instâncias existentes: DROP TABLE IF EXISTS api_access_logs; (opcional)
+
+        CREATE TABLE IF NOT EXISTS calendar_entries (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            uuid            TEXT NOT NULL UNIQUE,
+            category        TEXT NOT NULL CHECK (category IN ('holiday','commemoration','saint','event')),
+            month           INTEGER NOT NULL CHECK (month BETWEEN 1 AND 12),
+            day             INTEGER NOT NULL CHECK (day BETWEEN 1 AND 31),
+            year            INTEGER NULL,
+            title           TEXT NOT NULL,
+            description     TEXT NULL,
+            link            TEXT NULL,
+            holiday_scope   TEXT NULL CHECK (holiday_scope IN ('national','state','municipal')),
+            uf              TEXT NULL,
+            city            TEXT NULL,
+            source          TEXT NULL,
+            tier            TEXT NOT NULL DEFAULT 'free' CHECK (tier IN ('free','plus','premium')),
+            sort_order      INTEGER NOT NULL DEFAULT 0,
+            active          INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0,1)),
+            created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_calendar_entries_month_day ON calendar_entries(month, day);
+        CREATE INDEX IF NOT EXISTS idx_calendar_entries_category ON calendar_entries(category);
+        CREATE INDEX IF NOT EXISTS idx_calendar_entries_source ON calendar_entries(category, month, day, source);
     ");
 
     // phrase_collections pode já existir (criada por uma versão anterior

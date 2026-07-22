@@ -268,3 +268,40 @@ CREATE TABLE IF NOT EXISTS upload_links (
     updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_upload_links_hash ON upload_links(token_hash);
+
+-- ── Datas comemorativas / feriados / santos / eventos históricos ────────────
+-- Tabela única (categoria como discriminador) em vez de 4 tabelas separadas --
+-- todas as categorias compartilham a mesma consulta de acesso (mês+dia) e o
+-- mesmo import CSV, só variam em quais colunas opcionais preenchem:
+--   holiday      -> title, holiday_scope, uf (se state/municipal), city (se municipal)
+--   commemoration-> title
+--   saint        -> title (nome), link (fonte, opcional)
+--   event        -> title (descrição do evento), year (ano em que ocorreu)
+-- year é NULL para itens recorrentes anuais (feriados/comemorações/santos);
+-- em "event" guarda o ano histórico do fato. source identifica a origem do
+-- registro ('manual', 'csv' ou o domínio da API externa) -- usado para poder
+-- substituir em bloco os itens importados de uma fonte específica sem afetar
+-- cadastros manuais (ver calendarEntryReplaceFromSource() em src/repo.php).
+CREATE TABLE IF NOT EXISTS calendar_entries (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    uuid            TEXT NOT NULL UNIQUE,
+    category        TEXT NOT NULL CHECK (category IN ('holiday','commemoration','saint','event')),
+    month           INTEGER NOT NULL CHECK (month BETWEEN 1 AND 12),
+    day             INTEGER NOT NULL CHECK (day BETWEEN 1 AND 31),
+    year            INTEGER NULL,
+    title           TEXT NOT NULL,
+    description     TEXT NULL,
+    link            TEXT NULL,
+    holiday_scope   TEXT NULL CHECK (holiday_scope IN ('national','state','municipal')),
+    uf              TEXT NULL,
+    city            TEXT NULL,
+    source          TEXT NULL,
+    tier            TEXT NOT NULL DEFAULT 'free' CHECK (tier IN ('free','plus','premium')),
+    sort_order      INTEGER NOT NULL DEFAULT 0,
+    active          INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0,1)),
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_calendar_entries_month_day ON calendar_entries(month, day);
+CREATE INDEX IF NOT EXISTS idx_calendar_entries_category ON calendar_entries(category);
+CREATE INDEX IF NOT EXISTS idx_calendar_entries_source ON calendar_entries(category, month, day, source);
