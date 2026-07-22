@@ -84,9 +84,9 @@ $logCtx['user_id'] = $tokenResult['token_row']['user_id'] ?? null;
 
 $resource = isset($_GET['resource']) ? strtolower(trim((string) $_GET['resource'])) : '';
 $logCtx['resource'] = $resource !== '' ? $resource : null;
-$validResources = ['grid-sizes', 'album-templates', 'phrases', 'phrase-collections', 'assets', 'backgrounds', 'overlays', 'collection', 'emoji-kitchen'];
+$validResources = ['grid-sizes', 'album-templates', 'phrases', 'phrase-collections', 'assets', 'backgrounds', 'overlays', 'collection', 'emoji-kitchen', 'calendar-dates'];
 if (!in_array($resource, $validResources, true)) {
-    v1JsonError(400, 'Recurso inválido. Disponíveis: grid-sizes, album-templates, phrases, phrase-collections, assets, backgrounds, overlays, collection, emoji-kitchen.');
+    v1JsonError(400, 'Recurso inválido. Disponíveis: grid-sizes, album-templates, phrases, phrase-collections, assets, backgrounds, overlays, collection, emoji-kitchen, calendar-dates.');
 }
 
 $data = [];
@@ -209,6 +209,36 @@ switch ($resource) {
         }
 
         v1JsonError(400, 'Parâmetro "mode" inválido. Disponíveis: supported, partners, combo, list.');
+        break;
+
+    // Feriados/comemorações/santos/eventos históricos de uma data (mês+dia,
+    // sem ano -- recorrente todo ano). Aceita "month"+"day" OU "date=mmdd"
+    // (ex.: 25/12 -> date=1225). Sem nenhum dos dois, usa a data atual (UTC),
+    // já que o caso de uso mais comum é "o que temos para hoje".
+    //   ?resource=calendar-dates&month=12&day=25
+    //   ?resource=calendar-dates&date=1225
+    case 'calendar-dates':
+        $month = null;
+        $day = null;
+        if (isset($_GET['date']) && preg_match('/^(\d{2})(\d{2})$/', (string) $_GET['date'], $m)) {
+            $month = (int) $m[1];
+            $day = (int) $m[2];
+        } elseif (isset($_GET['month']) && isset($_GET['day'])) {
+            $month = (int) $_GET['month'];
+            $day = (int) $_GET['day'];
+        }
+        if ($month === null || $day === null) {
+            $now = new DateTime('now', new DateTimeZone('UTC'));
+            $month = (int) $now->format('n');
+            $day = (int) $now->format('j');
+        }
+        if ($month < 1 || $month > 12 || $day < 1 || $day > 31) {
+            v1JsonError(400, 'Parâmetros "month"/"day" (ou "date=mmdd") inválidos.');
+        }
+        $data = [
+            'month' => $month,
+            'day' => $day,
+        ] + calendarEntryForDate($tier, $month, $day);
         break;
 }
 
