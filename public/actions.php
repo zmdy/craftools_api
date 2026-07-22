@@ -351,6 +351,45 @@ try {
                 flashRedirect('success', 'Imagem removida.', $backTo);
             }
             break;
+
+        // --------------------------------------------------------- calendar_dates
+        case 'calendar_dates':
+            if ($action === 'save') {
+                $id = (int) ($_POST['id'] ?? 0);
+                $category = (string) ($_POST['category'] ?? '');
+                $month = (int) ($_POST['month'] ?? 0);
+                $day = (int) ($_POST['day'] ?? 0);
+                $title = trim((string) ($_POST['title'] ?? ''));
+
+                if (!in_array($category, CALENDAR_ENTRY_CATEGORIES, true)) {
+                    flashRedirect('error', 'Categoria inválida.', 'index.php?page=calendar_dates');
+                }
+                if ($month < 1 || $month > 12 || $day < 1 || $day > 31) {
+                    flashRedirect('error', 'Mês/dia inválidos.', 'index.php?page=calendar_dates');
+                }
+                if ($title === '') {
+                    flashRedirect('error', 'O título é obrigatório.', 'index.php?page=calendar_dates');
+                }
+                if ($category === 'event' && trim((string) ($_POST['year'] ?? '')) === '') {
+                    flashRedirect('error', 'Eventos históricos exigem o ano.', 'index.php?page=calendar_dates');
+                }
+
+                if ($id > 0) {
+                    calendarEntryUpdate($id, $_POST);
+                    auditLog($adminId, 'update', 'calendar_entries', (string) $id);
+                    flashRedirect('success', 'Registro atualizado.', 'index.php?page=calendar_dates');
+                }
+                $newId = calendarEntryCreate($_POST);
+                auditLog($adminId, 'create', 'calendar_entries', (string) $newId);
+                flashRedirect('success', 'Registro criado.', 'index.php?page=calendar_dates');
+            }
+            if ($action === 'delete') {
+                $id = (int) ($_POST['id'] ?? 0);
+                calendarEntryDelete($id);
+                auditLog($adminId, 'delete', 'calendar_entries', (string) $id);
+                flashRedirect('success', 'Registro removido.', 'index.php?page=calendar_dates');
+            }
+            break;
     }
 } catch (RuntimeException $ex) {
     flashRedirect('error', $ex->getMessage(), 'index.php?page=' . $page);
