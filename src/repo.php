@@ -1155,12 +1155,12 @@ function apiAccessLogStats(): array {
 const CALENDAR_ENTRY_CATEGORIES = ['holiday', 'commemoration', 'saint', 'event'];
 const CALENDAR_ENTRY_SCOPES     = ['national', 'state', 'municipal'];
 
-/** Mapa categoria interna (EN) -> chave usada na resposta agrupada da API pública (PT-BR, como pedido). */
+/** Mapa categoria interna -> chave usada na resposta agrupada da API pública (ambas em inglês). */
 const CALENDAR_ENTRY_API_GROUPS = [
-    'holiday'       => 'feriados',
-    'commemoration' => 'comemoracoes',
-    'saint'         => 'santos',
-    'event'         => 'eventos',
+    'holiday'       => 'holidays',
+    'commemoration' => 'commemorations',
+    'saint'         => 'saints',
+    'event'         => 'events',
 ];
 
 function calendarEntryList(?string $filterCategory = null, ?int $filterMonth = null, ?int $filterDay = null, ?string $filterSource = null): array {
@@ -1289,8 +1289,8 @@ function calendarEntryToApiShape(array $row): array {
 
 /**
  * Consulta principal da API pública: tudo cadastrado para um mês/dia,
- * filtrado por tier e agrupado nas 4 categorias pedidas (chaves em PT-BR,
- * já que é o vocabulário do domínio -- feriados/comemoracoes/santos/eventos).
+ * filtrado por tier e agrupado nas 4 categorias pedidas (chaves em inglês --
+ * holidays/commemorations/saints/events -- espelhando CALENDAR_ENTRY_CATEGORIES).
  */
 function calendarEntryForDate(string $tier, int $month, int $day): array {
     $stmt = db()->prepare(
@@ -1299,7 +1299,7 @@ function calendarEntryForDate(string $tier, int $month, int $day): array {
     );
     $stmt->execute([$month, $day]);
 
-    $out = ['feriados' => [], 'comemoracoes' => [], 'santos' => [], 'eventos' => []];
+    $out = ['holidays' => [], 'commemorations' => [], 'saints' => [], 'events' => []];
     foreach ($stmt->fetchAll() as $row) {
         if (!tierAtLeast($tier, $row['tier'])) {
             continue;
