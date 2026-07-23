@@ -84,9 +84,8 @@ function ensureAdditiveSchema(PDO $pdo): void {
         );
         CREATE INDEX IF NOT EXISTS idx_phrase_collection_links_collection ON phrase_collection_links(collection_id);
 
-<<<<<<< HEAD
-        -- api_access_logs removida: logs gravados em storage/logs/api/YYYY-MM-DD.jsonl
-        -- Instâncias existentes: DROP TABLE IF EXISTS api_access_logs; (opcional)
+        -- api_access_logs removed: logs are written to storage/logs/api/YYYY-MM-DD.jsonl
+        -- Existing instances: DROP TABLE IF EXISTS api_access_logs; (optional)
 
         CREATE TABLE IF NOT EXISTS calendar_entries (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -111,10 +110,6 @@ function ensureAdditiveSchema(PDO $pdo): void {
         CREATE INDEX IF NOT EXISTS idx_calendar_entries_month_day ON calendar_entries(month, day);
         CREATE INDEX IF NOT EXISTS idx_calendar_entries_category ON calendar_entries(category);
         CREATE INDEX IF NOT EXISTS idx_calendar_entries_source ON calendar_entries(category, month, day, source);
-=======
-        -- api_access_logs removed: logs are written to storage/logs/api/YYYY-MM-DD.jsonl
-        -- Existing instances: DROP TABLE IF EXISTS api_access_logs; (optional)
->>>>>>> caba1edee058052334ac0c662a34b97b5ffbcb36
     ");
 
     // phrase_collections may already exist (created by an earlier version of
