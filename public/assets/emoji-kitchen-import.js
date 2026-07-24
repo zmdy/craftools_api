@@ -24,6 +24,18 @@
     // array simples de combos: cada `data[codepoint].combinations[otherCodepoint]`
     // é uma lista de objetos {leftEmoji, rightEmoji, leftEmojiCodepoint,
     // rightEmojiCodepoint, gStaticUrl, isLatest, ...}. ──────────────────────
+    //
+    // Cada lista guarda o HISTÓRICO de variantes daquele par (o Google já
+    // trocou o estilo do figurinha algumas vezes; a versão antiga fica no
+    // arquivo com isLatest:false quando surge uma nova). O banco tem um
+    // índice único por (left_codepoint, right_codepoint) e faz upsert --
+    // então mandar as variantes antigas não cria linhas extras, só faz o
+    // upsert rodar de novo em cima da mesma linha, e não garante que a
+    // versão que sobrevive seja de fato a mais recente (depende da ordem em
+    // que as variantes aparecem no arquivo). Por isso só a variante
+    // isLatest:true de cada par é mantida aqui -- ausência do campo é
+    // tratada como "é a mais recente", igual ao fallback do lado PHP
+    // (emojiKitchenUpsertBatch() em repo.php).
     function flattenMetadata(json) {
         const out = [];
         const data = json && json.data;
@@ -38,9 +50,9 @@
                 const list = combinations[otherCodepoint];
                 if (!Array.isArray(list)) return;
                 list.forEach(function (combo) {
-                    if (combo && combo.leftEmoji && combo.rightEmoji && combo.gStaticUrl) {
-                        out.push(combo);
-                    }
+                    if (!combo || !combo.leftEmoji || !combo.rightEmoji || !combo.gStaticUrl) return;
+                    if ('isLatest' in combo && !combo.isLatest) return;
+                    out.push(combo);
                 });
             });
         });
