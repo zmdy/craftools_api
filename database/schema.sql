@@ -143,6 +143,41 @@ CREATE TABLE IF NOT EXISTS asset_images (
 );
 CREATE INDEX IF NOT EXISTS idx_asset_images_collection ON asset_images(collection_id);
 
+-- ── Coleções de shapes (packs de SVG extra, ex.: assets/shapes/pack_01 do
+-- craftools) — mesmo padrão de asset_collections/asset_images, mas sem
+-- conversão para WebP: o arquivo é mantido como SVG vetorial (sanitizado no
+-- upload), já que o ShapeTool.ts do craftools recolore o SVG em runtime via
+-- fill/stroke, o que exige o markup vetorial original.
+CREATE TABLE IF NOT EXISTS shape_collections (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    uuid            TEXT NOT NULL UNIQUE,
+    name            TEXT NOT NULL DEFAULT '',
+    original_path   TEXT NULL,
+    comment         TEXT NULL DEFAULT '',
+    tier            TEXT NOT NULL DEFAULT 'free' CHECK (tier IN ('free','plus','premium')),
+    sort_order      INTEGER NOT NULL DEFAULT 0,
+    active          INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0,1)),
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- file_path é relativo à pasta pública ("<uuid_colecao>/<uuid>.svg"), nunca
+-- um caminho absoluto do servidor — mesmo formato de asset_images.file_path.
+CREATE TABLE IF NOT EXISTS shape_assets (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    uuid            TEXT NOT NULL UNIQUE,
+    collection_id   INTEGER NOT NULL REFERENCES shape_collections(id) ON DELETE CASCADE,
+    original_name   TEXT NULL,
+    file_path       TEXT NOT NULL,
+    size_bytes      INTEGER NULL,
+    comment         TEXT NULL DEFAULT '',
+    tier            TEXT NOT NULL DEFAULT 'free' CHECK (tier IN ('free','plus','premium')),
+    sort_order      INTEGER NOT NULL DEFAULT 0,
+    active          INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0,1)),
+    created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_shape_assets_collection ON shape_assets(collection_id);
+
 -- ── Banco de frases (motivacionais etc.) ─────────────────────────────────────
 CREATE TABLE IF NOT EXISTS phrases (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
