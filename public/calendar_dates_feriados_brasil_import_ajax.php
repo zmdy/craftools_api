@@ -23,6 +23,13 @@
  * datas (calendarEntryReplaceYearFromSource() troca a base inteira desta
  * fonte a cada execução).
  *
+ * FALLBACK dos feriados nacionais: se o feriados-brasil ainda não publicou
+ * o ano pedido (ex.: ano futuro), busca a mesma lista via scraping da
+ * página de feriados nacionais da ANBIMA
+ * (https://www.anbima.com.br/feriados/fer_nacionais/{ano}.asp -- ver
+ * fbFetchAnbimaNacionais()). Feriados estaduais e datas comemorativas não
+ * têm fallback -- a ANBIMA só publica o calendário nacional/bancário.
+ *
  * POST  op=process  year=YYYY  — busca as 3 categorias para o ano informado
  *                                 e substitui em bloco todos os registros
  *                                 desta fonte (rodar de novo não duplica).
@@ -48,16 +55,17 @@ const FERIADOS_BRASIL_BASE    = 'https://raw.githubusercontent.com/joaopbini/fer
 const FERIADOS_BRASIL_TIMEOUT = 10; // segundos, por chamada HTTP (arquivos maiores que os da apicdata)
 
 /**
- * Busca uma URL e decodifica a resposta como JSON (array). Mesma estratégia
- * de calImportFetchJson() em calendar_dates_api_import_ajax.php (cURL com
+ * Busca uma URL e retorna o corpo cru da resposta (string) ou null em
+ * qualquer falha (rede, HTTP != 2xx). Mesma estratégia de
+ * calImportFetchJson() em calendar_dates_api_import_ajax.php (cURL com
  * fallback pra file_get_contents) -- não compartilhada entre os dois
  * arquivos porque cada um já é standalone/sem dependências entre si, e a
  * função é pequena o bastante pra duplicar sem custo real de manutenção.
- * Retorna null em qualquer falha (rede, HTTP != 2xx, JSON inválido/não é
- * array) -- o chamador trata isso como "categoria indisponível", nunca
- * interrompe o processamento das outras.
+ * Usada tanto por fbFetchJsonArray() (GitHub) quanto por
+ * fbFetchAnbimaNacionais() (scraping da ANBIMA), já que a segunda precisa
+ * do HTML cru, não de JSON já decodificado.
  */
-function fbFetchJsonArray(string $url): ?array {
+function fbFetchRaw(string $url): ?string {
     if (function_exists('curl_init')) {
         $ch = curl_init($url);
         curl_setopt_array($ch, [
@@ -74,19 +82,104 @@ function fbFetchJsonArray(string $url): ?array {
         if ($body === false || $status < 200 || $status >= 300) {
             return null;
         }
-    } else {
-        $context = stream_context_create(['http' => [
-            'method'  => 'GET',
-            'timeout' => FERIADOS_BRASIL_TIMEOUT,
-            'header'  => "User-Agent: CraftToolsAPI-CalendarImport/1.0\r\n",
-        ]]);
-        $body = @file_get_contents($url, false, $context);
-        if ($body === false) {
-            return null;
-        }
+        return $body;
+    }
+    $context = stream_context_create(['http' => [
+        'method'  => 'GET',
+        'timeout' => FERIADOS_BRASIL_TIMEOUT,
+        'header'  => "User-Agent: CraftToolsAPI-CalendarImport/1.0\r\n",
+    ]]);
+    $body = @file_get_contents($url, false, $context);
+    return $body === false ? null : $body;
+}
+
+/**
+ * Busca uma URL e decodifica a resposta como JSON (array). Retorna null em
+ * qualquer falha (fetch, JSON inválido/não é array) -- o chamador trata
+ * isso como "categoria indisponível", nunca interrompe o processamento das
+ * outras.
+ */
+function fbFetchJsonArray(string $url): ?array {
+    $body = fbFetchRaw($url);
+    if ($body === null) {
+        return null;
     }
     $data = json_decode($body, true);
     return is_array($data) ? $data : null;
+}
+
+/**
+ * Fallback para feriados nacionais quando o feriados-brasil (GitHub) ainda
+ * não tem o ano pedido (ex.: ano futuro que o repositório ainda não
+ * publicou): faz scraping da página de feriados nacionais da ANBIMA
+ * (calendário bancário oficial), que publica uma tabela HTML simples com
+ * Data/Dia da Semana/Feriado por ano -- ver
+ * https://www.anbima.com.br/feriados/fer_nacionais/{ano}.asp. Usa
+ * DOMDocument+XPath (tolerante a HTML malformado) em vez de regex contra a
+ * marcação exata, já que essa página não tem contrato/versionamento como o
+ * JSON do GitHub e pode mudar de estrutura sem aviso.
+ *
+ * IMPORTANTE: a ANBIMA lista o calendário BANCÁRIO, que inclui Carnaval e
+ * Corpus Christi (ponto facultativo na maior parte do país, não feriado
+ * nacional oficial em todo lugar) -- um escopo um pouco mais amplo que a
+ * categoria "NACIONAL" estrita do feriados-brasil. Como isso só roda
+ * quando o GitHub não tem o ano ainda, aceita-se essa diferença em troca
+ * de ter dados em vez de nada.
+ *
+ * @return array<int,array{day:int,month:int,title:string}>|null null em
+ *   qualquer falha (rede, extensão DOM ausente, tabela não encontrada/vazia).
+ */
+function fbFetchAnbimaNacionais(int $year): ?array {
+    if (!class_exists('DOMDocument')) {
+        return null;
+    }
+
+    $body = fbFetchRaw('https://www.anbima.com.br/feriados/fer_nacionais/' . $year . '.asp');
+    if ($body === null) {
+        return null;
+    }
+
+    // Página antiga (.asp), normalmente publicada em ISO-8859-1 -- converte
+    // pra UTF-8 antes do DOMDocument, senão acentos (ç, ã, é...) corrompem.
+    $encoding = mb_detect_encoding($body, ['UTF-8', 'ISO-8859-1', 'Windows-1252'], true) ?: 'ISO-8859-1';
+    if ($encoding !== 'UTF-8') {
+        $converted = @iconv($encoding, 'UTF-8//IGNORE', $body);
+        if ($converted !== false) {
+            $body = $converted;
+        }
+    }
+
+    libxml_use_internal_errors(true);
+    $dom = new DOMDocument();
+    $dom->loadHTML('<?xml encoding="UTF-8">' . $body);
+    libxml_clear_errors();
+
+    $xpath = new DOMXPath($dom);
+    $rows = $xpath->query('//table//tr');
+    if ($rows === false || $rows->length === 0) {
+        return null;
+    }
+
+    $items = [];
+    foreach ($rows as $row) {
+        $cells = $xpath->query('.//td', $row);
+        if ($cells === false || $cells->length < 3) {
+            continue; // linha de cabeçalho ou layout inesperado
+        }
+        $dateText = trim((string) $cells->item(0)->textContent);
+        $title    = trim((string) $cells->item(2)->textContent);
+        if (!preg_match('#^(\d{1,2})/(\d{1,2})/\d{2,4}$#', $dateText, $m)) {
+            continue;
+        }
+        $day = (int) $m[1];
+        $month = (int) $m[2];
+        if ($title === '' || $day < 1 || $day > 31 || $month < 1 || $month > 12) {
+            continue;
+        }
+        $items[] = ['day' => $day, 'month' => $month, 'title' => $title];
+    }
+
+    return count($items) > 0 ? $items : null;
 }
 
 /**
@@ -124,10 +217,27 @@ if ($year < 2000) {
 $items = [];
 $fetchErrors = [];
 
-// ── Feriados nacionais ──────────────────────────────────────────────────
+// ── Feriados nacionais (fallback: ANBIMA se o GitHub ainda não tem o ano) ──
 $nacional = fbFetchJsonArray(FERIADOS_BRASIL_BASE . '/feriados/nacional/json/' . $year . '.json');
-if ($nacional === null) {
-    $fetchErrors[] = 'feriados nacionais: falha ao consultar o GitHub.';
+$nacionalSource = 'github';
+if ($nacional === null || count($nacional) === 0) {
+    $anbimaItems = fbFetchAnbimaNacionais($year);
+    if ($anbimaItems === null) {
+        $fetchErrors[] = 'feriados nacionais: sem dados no GitHub para ' . $year . ' e falha ao consultar a ANBIMA como alternativa.';
+    } else {
+        $nacionalSource = 'anbima';
+        foreach ($anbimaItems as $entry) {
+            $items[] = [
+                'category'    => 'holiday',
+                'day'         => $entry['day'],
+                'month'       => $entry['month'],
+                'title'       => $entry['title'],
+                'description' => null, // a tabela da ANBIMA não traz descrição
+                'scope'       => 'national',
+                'uf'          => null,
+            ];
+        }
+    }
 } else {
     foreach ($nacional as $entry) {
         $dm = is_array($entry) ? fbParseDayMonth((string) ($entry['data'] ?? '')) : null;
@@ -207,14 +317,15 @@ foreach ($items as $item) {
     $counts[$item['category']] = ($counts[$item['category']] ?? 0) + 1;
 }
 
-auditLog($adminId, 'import', 'calendar_entries', 'feriados-brasil ' . $year . ': ' . $inserted . ' itens');
+auditLog($adminId, 'import', 'calendar_entries', 'feriados-brasil ' . $year . ' (nacional via ' . $nacionalSource . '): ' . $inserted . ' itens');
 
 echo json_encode([
     'status' => 'success',
     'data' => [
-        'year'   => $year,
-        'counts' => $counts,
-        'total'  => $inserted,
-        'errors' => $fetchErrors,
+        'year'           => $year,
+        'counts'         => $counts,
+        'total'          => $inserted,
+        'nacionalSource' => $nacionalSource, // 'github' ou 'anbima' (fallback usado)
+        'errors'         => $fetchErrors,
     ],
 ], JSON_UNESCAPED_UNICODE);

@@ -41,8 +41,12 @@
                     .filter(function (k) { return counts[k] > 0; })
                     .map(function (k) { return counts[k].toLocaleString('pt-BR') + ' ' + (categoryLabels[k] || k); });
 
+                const anbimaNote = data.data.nacionalSource === 'anbima'
+                    ? ' Feriados nacionais via ANBIMA (ainda não disponíveis no GitHub para ' + year + ').'
+                    : '';
+
                 doneMsg.textContent = data.data.total.toLocaleString('pt-BR') + ' registro(s) gravado(s) para ' + year +
-                    (parts.length ? ' (' + parts.join(', ') + ')' : '') + '.';
+                    (parts.length ? ' (' + parts.join(', ') + ')' : '') + '.' + anbimaNote;
                 loading.hidden = true;
                 doneBox.hidden = false;
 

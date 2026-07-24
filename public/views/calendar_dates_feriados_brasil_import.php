@@ -16,7 +16,13 @@ $currentYear = (int) (new DateTime('now', new DateTimeZone('UTC')))->format('Y')
             calendário. Para feriados de <strong>data móvel</strong> (Sexta-Feira Santa, Carnaval no RJ, Dia das
             Mães/Pais), isso significa que a data fica a do ano importado; rode a importação de novo escolhendo o
             ano seguinte para atualizar essas datas -- isso substitui a base inteira desta fonte, sem duplicar.
-            Cadastros manuais, via CSV ou de outra fonte nunca são afetados.
+            Cadastros manuais, via CSV ou de outra fonte nunca são afetados.<br><br>
+            Se o repositório ainda não tiver os <strong>feriados nacionais</strong> do ano escolhido (ex.: ano
+            futuro), eles são buscados automaticamente na <strong>ANBIMA</strong>
+            (<code>anbima.com.br/feriados</code>) como alternativa. A lista da ANBIMA é o calendário bancário
+            (inclui Carnaval e Corpus Christi como ponto facultativo), um pouco mais ampla que a categoria
+            "nacional" estrita do feriados-brasil -- o resultado da importação indica quando essa alternativa foi
+            usada.
         </p>
 
         <div id="cfb-import-app" data-csrf="<?= e(csrfToken()) ?>">
