@@ -253,7 +253,18 @@ function albumTemplateRowFromInput(array $d): array {
 // phrases — banco de frases (autor / frase / categoria / idioma)
 // ============================================================================
 
-function phraseList(?string $filterCategory = null, ?string $filterAuthor = null, ?string $filterCollection = null): array {
+/**
+ * @param int|null $limit  Page size; null = no LIMIT (every other caller --
+ *   e.g. any future bulk export -- keeps working unchanged by omitting
+ *   this). The admin list view (phrases.php) always passes it.
+ */
+function phraseList(
+    ?string $filterCategory = null,
+    ?string $filterAuthor = null,
+    ?string $filterCollection = null,
+    ?int $limit = null,
+    ?int $offset = null
+): array {
     // LEFT JOIN only to bring the collection name (if any) alongside each
     // phrase — displayed in the admin panel listing.
     $sql = "SELECT phrases.*, pc.name AS collection_name
@@ -280,9 +291,49 @@ function phraseList(?string $filterCategory = null, ?string $filterAuthor = null
         $params[] = $filterCollection;
     }
     $sql .= ' GROUP BY phrases.id ORDER BY phrases.created_at DESC';
+    if ($limit !== null) {
+        $sql .= ' LIMIT ? OFFSET ?';
+    }
+    $stmt = db()->prepare($sql);
+    foreach ($params as $i => $p) {
+        $stmt->bindValue($i + 1, $p);
+    }
+    if ($limit !== null) {
+        $stmt->bindValue(count($params) + 1, max(1, min(500, $limit)), PDO::PARAM_INT);
+        $stmt->bindValue(count($params) + 2, max(0, $offset ?? 0), PDO::PARAM_INT);
+    }
+    $stmt->execute();
+    return $stmt->fetchAll();
+}
+
+/** Total rows matching the same filters as phraseList() -- used for pagination. */
+function phraseListCount(?string $filterCategory = null, ?string $filterAuthor = null, ?string $filterCollection = null): int {
+    $sql = "SELECT COUNT(DISTINCT phrases.id) AS c
+            FROM phrases
+            LEFT JOIN phrase_collection_links l ON l.phrase_id = phrases.id
+            LEFT JOIN phrase_collections pc ON pc.id = l.collection_id
+            WHERE 1=1";
+    $params = [];
+    if ($filterCategory !== null && $filterCategory !== '') {
+        $sql .= " AND (',' || phrases.category || ',' LIKE ?)";
+        $params[] = '%,' . $filterCategory . ',%';
+    }
+    if ($filterAuthor !== null && $filterAuthor !== '') {
+        $sql .= ' AND phrases.author = ?';
+        $params[] = $filterAuthor;
+    }
+    if ($filterCollection !== null && $filterCollection !== '') {
+        $sql .= ' AND phrases.id IN (
+            SELECT l2.phrase_id FROM phrase_collection_links l2
+            INNER JOIN phrase_collections pc2 ON pc2.id = l2.collection_id
+            WHERE pc2.name = ? COLLATE NOCASE
+        )';
+        $params[] = $filterCollection;
+    }
     $stmt = db()->prepare($sql);
     $stmt->execute($params);
-    return $stmt->fetchAll();
+    $row = $stmt->fetch();
+    return (int) ($row['c'] ?? 0);
 }
 
 function phraseFind(int $id): ?array {
@@ -853,6 +904,153 @@ function assetCollectionsForApi(string $tier, ?string $typeFilter = null, ?strin
 }
 
 // ============================================================================
+// shape_collections / shape_assets — packs de shapes SVG extra
+// ============================================================================
+
+function shapeCollectionList(): array {
+    return repoList('shape_collections', 'sort_order ASC, id ASC');
+}
+
+function shapeCollectionFind(int $id): ?array {
+    return repoFind('shape_collections', $id);
+}
+
+function shapeCollectionFindByUuid(string $uuid): ?array {
+    return repoFindByUuid('shape_collections', $uuid);
+}
+
+/**
+ * Looks up a collection by its original_path (e.g.
+ * "assets/original/shapes/pack_01"). Same role as
+ * assetCollectionFindByOriginalPath() — reused by the bulk importer so
+ * re-running it doesn't create duplicate collections.
+ */
+function shapeCollectionFindByOriginalPath(string $originalPath): ?array {
+    $stmt = db()->prepare('SELECT * FROM shape_collections WHERE original_path = ? LIMIT 1');
+    $stmt->execute([$originalPath]);
+    $row = $stmt->fetch();
+    return $row !== false ? $row : null;
+}
+
+function shapeCollectionCreate(array $d): int {
+    return repoInsert('shape_collections', [
+        'uuid' => uuidv4(),
+        'name' => $d['name'] ?? '',
+        'original_path' => $d['original_path'] ?? '',
+        'comment' => $d['comment'] ?? '',
+        'tier' => $d['tier'],
+        'sort_order' => (int) ($d['sort_order'] ?? 0),
+        'active' => !empty($d['active']) ? 1 : 0,
+        'created_at' => nowSql(),
+        'updated_at' => nowSql(),
+    ]);
+}
+
+function shapeCollectionUpdate(int $id, array $d): void {
+    repoUpdate('shape_collections', $id, [
+        'name' => $d['name'] ?? '',
+        'comment' => $d['comment'] ?? '',
+        'tier' => $d['tier'],
+        'sort_order' => (int) ($d['sort_order'] ?? 0),
+        'active' => !empty($d['active']) ? 1 : 0,
+        'updated_at' => nowSql(),
+    ]);
+}
+
+function shapeCollectionDelete(int $id): void {
+    repoDelete('shape_collections', $id); // ON DELETE CASCADE removes the collection's shapes
+}
+
+function shapeAssetsByCollection(int $collectionId): array {
+    return repoList('shape_assets', 'sort_order ASC, id ASC', ['collection_id' => $collectionId]);
+}
+
+function shapeAssetFind(int $id): ?array {
+    return repoFind('shape_assets', $id);
+}
+
+function shapeAssetCreate(array $d): int {
+    return repoInsert('shape_assets', [
+        'uuid' => uuidv4(),
+        'collection_id' => (int) $d['collection_id'],
+        'original_name' => $d['original_name'] ?? null,
+        'file_path' => $d['file_path'],
+        'size_bytes' => $d['size_bytes'] ?? null,
+        'comment' => $d['comment'] ?? '',
+        'tier' => $d['tier'],
+        'sort_order' => (int) ($d['sort_order'] ?? 0),
+        'active' => 1,
+        'created_at' => nowSql(),
+    ]);
+}
+
+function shapeAssetUpdate(int $id, array $d): void {
+    repoUpdate('shape_assets', $id, [
+        'comment' => $d['comment'] ?? '',
+        'tier' => $d['tier'],
+        'sort_order' => (int) ($d['sort_order'] ?? 0),
+        'active' => !empty($d['active']) ? 1 : 0,
+    ]);
+}
+
+function shapeAssetDelete(int $id): void {
+    repoDelete('shape_assets', $id);
+}
+
+/**
+ * Monta a resposta pública ([{id, name, comment, tier, shapes:[{id, api_url,
+ * comment, tier}]}]) — mesmo formato/regra de visibilidade por tier de
+ * assetCollectionsForApi(), usado pelo ShapeAssetLoader.ts do craftools para
+ * descobrir os packs de shapes disponíveis via API em vez de import.meta.glob
+ * (build-time only).
+ */
+function shapeCollectionsForApi(string $tier, ?string $onlyUuid = null): array {
+    $sql = 'SELECT * FROM shape_collections WHERE active = 1';
+    $params = [];
+    if ($onlyUuid !== null) {
+        $sql .= ' AND uuid = ?';
+        $params[] = $onlyUuid;
+    }
+    $sql .= ' ORDER BY sort_order ASC, id ASC';
+    $stmt = db()->prepare($sql);
+    $stmt->execute($params);
+    $collections = $stmt->fetchAll();
+
+    $out = [];
+    foreach ($collections as $col) {
+        if (!tierAtLeast($tier, $col['tier'])) {
+            continue;
+        }
+
+        $shapeStmt = db()->prepare('SELECT * FROM shape_assets WHERE collection_id = ? AND active = 1 ORDER BY sort_order ASC, id ASC');
+        $shapeStmt->execute([$col['id']]);
+
+        $shapes = [];
+        foreach ($shapeStmt->fetchAll() as $shape) {
+            if (!tierAtLeast($tier, $shape['tier'])) {
+                continue;
+            }
+            $shapes[] = [
+                'id' => $shape['uuid'],
+                'api_url' => '/' . ltrim((string) $shape['file_path'], '/'),
+                'comment' => (string) $shape['comment'],
+                'tier' => $shape['tier'],
+            ];
+        }
+
+        $out[] = [
+            'id' => $col['uuid'],
+            'name' => (string) $col['name'],
+            'comment' => (string) $col['comment'],
+            'original_path' => (string) $col['original_path'],
+            'tier' => $col['tier'],
+            'shapes' => $shapes,
+        ];
+    }
+    return $out;
+}
+
+// ============================================================================
 // Dashboard — quick counts
 // ============================================================================
 
@@ -869,6 +1067,8 @@ function dashboardCounts(): array {
         'asset_collections' => $count('asset_collections'),
         'asset_images' => $count('asset_images'),
         'phrases' => $count('phrases'),
+        'shape_collections' => $count('shape_collections'),
+        'shape_assets' => $count('shape_assets'),
     ];
 }
 
@@ -1163,7 +1363,20 @@ const CALENDAR_ENTRY_API_GROUPS = [
     'event'         => 'events',
 ];
 
-function calendarEntryList(?string $filterCategory = null, ?int $filterMonth = null, ?int $filterDay = null, ?string $filterSource = null): array {
+/**
+ * @param int|null $limit  Page size; null = no LIMIT at all (every other
+ *   caller of this function -- importers/exporters that need the FULL
+ *   matching set, not a page of it -- keeps working unchanged by omitting
+ *   this). The admin list view (calendar_dates.php) always passes it.
+ */
+function calendarEntryList(
+    ?string $filterCategory = null,
+    ?int $filterMonth = null,
+    ?int $filterDay = null,
+    ?string $filterSource = null,
+    ?int $limit = null,
+    ?int $offset = null
+): array {
     $sql = 'SELECT * FROM calendar_entries WHERE 1=1';
     $params = [];
     if ($filterCategory !== null && $filterCategory !== '') {
@@ -1183,9 +1396,47 @@ function calendarEntryList(?string $filterCategory = null, ?int $filterMonth = n
         $params[] = $filterSource;
     }
     $sql .= ' ORDER BY month ASC, day ASC, category ASC, sort_order ASC, id DESC';
+    if ($limit !== null) {
+        $sql .= ' LIMIT ? OFFSET ?';
+    }
+    $stmt = db()->prepare($sql);
+    foreach ($params as $i => $p) {
+        $stmt->bindValue($i + 1, $p);
+    }
+    if ($limit !== null) {
+        $stmt->bindValue(count($params) + 1, max(1, min(500, $limit)), PDO::PARAM_INT);
+        $stmt->bindValue(count($params) + 2, max(0, $offset ?? 0), PDO::PARAM_INT);
+        $stmt->execute();
+    } else {
+        $stmt->execute();
+    }
+    return $stmt->fetchAll();
+}
+
+/** Total rows matching the same filters as calendarEntryList() -- used for pagination. */
+function calendarEntryListCount(?string $filterCategory = null, ?int $filterMonth = null, ?int $filterDay = null, ?string $filterSource = null): int {
+    $sql = 'SELECT COUNT(*) AS c FROM calendar_entries WHERE 1=1';
+    $params = [];
+    if ($filterCategory !== null && $filterCategory !== '') {
+        $sql .= ' AND category = ?';
+        $params[] = $filterCategory;
+    }
+    if ($filterMonth !== null) {
+        $sql .= ' AND month = ?';
+        $params[] = $filterMonth;
+    }
+    if ($filterDay !== null) {
+        $sql .= ' AND day = ?';
+        $params[] = $filterDay;
+    }
+    if ($filterSource !== null && $filterSource !== '') {
+        $sql .= ' AND source = ?';
+        $params[] = $filterSource;
+    }
     $stmt = db()->prepare($sql);
     $stmt->execute($params);
-    return $stmt->fetchAll();
+    $row = $stmt->fetch();
+    return (int) ($row['c'] ?? 0);
 }
 
 function calendarEntryFind(int $id): ?array {
