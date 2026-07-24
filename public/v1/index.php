@@ -84,9 +84,9 @@ $logCtx['user_id'] = $tokenResult['token_row']['user_id'] ?? null;
 
 $resource = isset($_GET['resource']) ? strtolower(trim((string) $_GET['resource'])) : '';
 $logCtx['resource'] = $resource !== '' ? $resource : null;
-$validResources = ['grid-sizes', 'album-templates', 'phrases', 'phrase-collections', 'assets', 'backgrounds', 'overlays', 'collection', 'emoji-kitchen', 'calendar-dates'];
+$validResources = ['grid-sizes', 'album-templates', 'phrases', 'phrase-collections', 'assets', 'backgrounds', 'overlays', 'collection', 'emoji-kitchen', 'calendar-dates', 'shapes', 'shape-collection'];
 if (!in_array($resource, $validResources, true)) {
-    v1JsonError(400, 'Recurso inválido. Disponíveis: grid-sizes, album-templates, phrases, phrase-collections, assets, backgrounds, overlays, collection, emoji-kitchen, calendar-dates.');
+    v1JsonError(400, 'Recurso inválido. Disponíveis: grid-sizes, album-templates, phrases, phrase-collections, assets, backgrounds, overlays, collection, emoji-kitchen, calendar-dates, shapes, shape-collection.');
 }
 
 $data = [];
@@ -126,6 +126,35 @@ switch ($resource) {
 
     case 'overlays':
         $data = assetCollectionsForApi($tier, 'overlay');
+        break;
+
+    // Packs de shapes SVG extra (ex.: assets/shapes/pack_01 do craftools),
+    // servidos aqui em vez de embutidos no build via import.meta.glob —
+    // mesmo formato de "assets" acima, mas cada item de "shapes" é um SVG
+    // (não uma imagem raster).
+    //   ?resource=shapes
+    //   ?resource=shape-collection&id=<uuid>
+    case 'shapes':
+        $data = shapeCollectionsForApi($tier);
+        break;
+
+    case 'shape-collection':
+        $id = isset($_GET['id']) ? preg_replace('/[^a-f0-9\-]/', '', (string) $_GET['id']) : '';
+        if ($id === '') {
+            v1JsonError(400, 'Parâmetro "id" é obrigatório para a rota "shape-collection".');
+        }
+
+        $visibleShapes = shapeCollectionsForApi($tier, $id);
+        if ($visibleShapes) {
+            $data = $visibleShapes[0];
+            break;
+        }
+
+        $rawShapeCollection = shapeCollectionFindByUuid($id);
+        if ($rawShapeCollection !== null) {
+            v1JsonError(403, 'Este pack de shapes requer um nível de acesso superior.');
+        }
+        v1JsonError(404, 'Pack de shapes não encontrado.');
         break;
 
     case 'collection':

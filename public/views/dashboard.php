@@ -12,6 +12,7 @@ $recentAudit = db()->query('SELECT * FROM audit_log ORDER BY id DESC LIMIT 8')->
     <div class="stat-card"><div class="stat-num"><?= (int) $counts['asset_collections'] ?></div><div class="stat-label">Coleções de Imagem</div></div>
     <div class="stat-card"><div class="stat-num"><?= (int) $counts['asset_images'] ?></div><div class="stat-label">Imagens</div></div>
     <div class="stat-card"><div class="stat-num"><?= (int) $counts['phrases'] ?></div><div class="stat-label">Frases</div></div>
+    <div class="stat-card"><div class="stat-num"><?= (int) $counts['shape_assets'] ?></div><div class="stat-label">Shapes</div></div>
 </div>
 
 <div class="card">

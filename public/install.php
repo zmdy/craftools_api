@@ -37,6 +37,7 @@ $requirementChecks = [
     ['label' => 'Extensão fileinfo', 'ok' => extension_loaded('fileinfo'), 'detail' => ''],
     ['label' => 'Extensão mbstring', 'ok' => extension_loaded('mbstring'), 'detail' => ''],
     ['label' => 'Extensão json', 'ok' => extension_loaded('json'), 'detail' => ''],
+    ['label' => 'Extensão dom', 'ok' => extension_loaded('dom'), 'detail' => 'Usada para sanitizar SVGs enviados na aba Shapes.'],
     ['label' => 'Pasta storage/ existe e é gravável', 'ok' => is_dir($craftoolsApiStorage) && is_writable($craftoolsApiStorage), 'detail' => $craftoolsApiStorage],
 ];
 $requirementsOk = true;

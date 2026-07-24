@@ -4,11 +4,32 @@ $editing         = $editId > 0 ? phraseFind($editId) : null;
 $filterCategory  = (string) ($_GET['category'] ?? '');
 $filterAuthor    = (string) ($_GET['author'] ?? '');
 $filterCollection = (string) ($_GET['collection'] ?? '');
+
+// Pagination -- previously phraseList() had no LIMIT, so this view fetched
+// and rendered EVERY matching phrase in one page load.
+$listPage       = max(1, (int) ($_GET['lp'] ?? 1));
+$listPerPage    = 50;
+$listOffset     = ($listPage - 1) * $listPerPage;
 $rows            = phraseList(
+    $filterCategory !== '' ? $filterCategory : null,
+    $filterAuthor !== '' ? $filterAuthor : null,
+    $filterCollection !== '' ? $filterCollection : null,
+    $listPerPage,
+    $listOffset
+);
+$listTotal      = phraseListCount(
     $filterCategory !== '' ? $filterCategory : null,
     $filterAuthor !== '' ? $filterAuthor : null,
     $filterCollection !== '' ? $filterCollection : null
 );
+$listTotalPages = max(1, (int) ceil($listTotal / $listPerPage));
+$baseQs         = http_build_query(array_filter([
+    'page'       => 'phrases',
+    'category'   => $filterCategory,
+    'author'     => $filterAuthor,
+    'collection' => $filterCollection,
+], static function ($v) { return $v !== ''; }));
+
 $categories      = phraseCategories();
 $authors         = phraseAuthors();
 $collectionNames = phraseCollectionNames();
@@ -82,45 +103,58 @@ if ($editing) {
 
 <div class="card">
     <div class="card-head">
-        <h2>Frases cadastradas (<?= count($rows) ?>)</h2>
+        <h2>Frases cadastradas (<?= number_format($listTotal, 0, ',', '.') ?>)</h2>
         <div class="d-flex gap-2" style="flex-wrap:wrap; align-items:center;">
-            <form method="get" action="index.php" class="d-flex gap-2" style="flex-wrap:wrap;">
-                <input type="hidden" name="page" value="phrases">
-                <?php if ($collectionNames): ?>
-                <select name="collection" data-autosubmit>
-                    <option value="">Todas as coleções</option>
-                    <?php foreach ($collectionNames as $c): ?>
-                        <option value="<?= e($c) ?>" <?= $filterCollection === $c ? 'selected' : '' ?>><?= e($c) ?></option>
-                    <?php endforeach; ?>
-                </select>
-                <?php endif; ?>
-                <?php if ($categories): ?>
-                <select name="category" data-autosubmit>
-                    <option value="">Todas as categorias</option>
-                    <?php foreach ($categories as $c): ?>
-                        <option value="<?= e($c) ?>" <?= $filterCategory === $c ? 'selected' : '' ?>><?= e($c) ?></option>
-                    <?php endforeach; ?>
-                </select>
-                <?php endif; ?>
-                <?php if ($authors): ?>
-                <select name="author" data-autosubmit>
-                    <option value="">Todos os autores</option>
-                    <?php foreach ($authors as $a): ?>
-                        <option value="<?= e($a) ?>" <?= $filterAuthor === $a ? 'selected' : '' ?>><?= e($a) ?></option>
-                    <?php endforeach; ?>
-                </select>
-                <?php endif; ?>
-                <?php if ($filterCategory !== '' || $filterAuthor !== '' || $filterCollection !== ''): ?>
-                    <a href="index.php?page=phrases" class="btn btn-outline btn-sm">Limpar filtros</a>
-                <?php endif; ?>
-            </form>
-            <a href="index.php?page=phrase_collections" class="btn btn-outline btn-sm" style="margin-left:auto;">
+            <a href="index.php?page=phrase_collections" class="btn btn-outline btn-sm">
                 <span class="material-symbols-outlined" style="font-size:15px;">sell</span> Coleções
             </a>
             <a href="index.php?page=phrases_csv_import" class="btn btn-outline btn-sm">
                 <span class="material-symbols-outlined" style="font-size:15px;">upload_file</span> Importar CSV
             </a>
         </div>
+    </div>
+
+    <div class="card-body" style="border-bottom:1px solid var(--border);">
+        <form method="get" action="index.php" class="d-flex gap-2" style="flex-wrap:wrap; align-items:flex-end;">
+            <input type="hidden" name="page" value="phrases">
+            <?php if ($collectionNames): ?>
+            <div class="field">
+                <label>Coleção</label>
+                <select name="collection" data-autosubmit>
+                    <option value="">Todas as coleções</option>
+                    <?php foreach ($collectionNames as $c): ?>
+                        <option value="<?= e($c) ?>" <?= $filterCollection === $c ? 'selected' : '' ?>><?= e($c) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <?php endif; ?>
+            <?php if ($categories): ?>
+            <div class="field">
+                <label>Categoria</label>
+                <select name="category" data-autosubmit>
+                    <option value="">Todas as categorias</option>
+                    <?php foreach ($categories as $c): ?>
+                        <option value="<?= e($c) ?>" <?= $filterCategory === $c ? 'selected' : '' ?>><?= e($c) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <?php endif; ?>
+            <?php if ($authors): ?>
+            <div class="field">
+                <label>Autor</label>
+                <select name="author" data-autosubmit>
+                    <option value="">Todos os autores</option>
+                    <?php foreach ($authors as $a): ?>
+                        <option value="<?= e($a) ?>" <?= $filterAuthor === $a ? 'selected' : '' ?>><?= e($a) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <?php endif; ?>
+            <button type="submit" class="btn btn-outline btn-sm">Filtrar</button>
+            <?php if ($filterCategory !== '' || $filterAuthor !== '' || $filterCollection !== ''): ?>
+                <a href="index.php?page=phrases" class="btn btn-outline btn-sm">Limpar filtros</a>
+            <?php endif; ?>
+        </form>
     </div>
 
     <div class="card-body" style="background:var(--bg-input); border-bottom:1px solid var(--border);">
@@ -214,6 +248,13 @@ if ($editing) {
             </tbody>
         </table>
     </div>
+    <?php if ($listTotalPages > 1): ?>
+    <div class="card-body d-flex" style="justify-content:center; gap:6px; align-items:center; border-top:1px solid var(--border);">
+        <a href="index.php?<?= $baseQs ?>&lp=<?= max(1, $listPage - 1) ?>" class="btn btn-outline btn-sm" <?= $listPage <= 1 ? 'style="pointer-events:none;opacity:.4;"' : '' ?>>Anterior</a>
+        <span class="text-muted" style="font-size:12.5px;">Página <?= $listPage ?> de <?= $listTotalPages ?></span>
+        <a href="index.php?<?= $baseQs ?>&lp=<?= min($listTotalPages, $listPage + 1) ?>" class="btn btn-outline btn-sm" <?= $listPage >= $listTotalPages ? 'style="pointer-events:none;opacity:.4;"' : '' ?>>Próxima</a>
+    </div>
+    <?php endif; ?>
 </div>
 
 <script src="assets/phrases-bulk.js"></script>

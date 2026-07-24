@@ -98,6 +98,7 @@ require_once __DIR__ . '/repo.php';
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/api_auth.php';
 require_once __DIR__ . '/images.php';
+require_once __DIR__ . '/shapes.php';
 require_once __DIR__ . '/upload_links.php';
 
 // Garante que o banco/schema existe desde a primeira requisição.

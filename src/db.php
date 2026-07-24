@@ -110,6 +110,33 @@ function ensureAdditiveSchema(PDO $pdo): void {
         CREATE INDEX IF NOT EXISTS idx_calendar_entries_month_day ON calendar_entries(month, day);
         CREATE INDEX IF NOT EXISTS idx_calendar_entries_category ON calendar_entries(category);
         CREATE INDEX IF NOT EXISTS idx_calendar_entries_source ON calendar_entries(category, month, day, source);
+
+        CREATE TABLE IF NOT EXISTS shape_collections (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            uuid            TEXT NOT NULL UNIQUE,
+            name            TEXT NOT NULL DEFAULT '',
+            original_path   TEXT NULL,
+            comment         TEXT NULL DEFAULT '',
+            tier            TEXT NOT NULL DEFAULT 'free' CHECK (tier IN ('free','plus','premium')),
+            sort_order      INTEGER NOT NULL DEFAULT 0,
+            active          INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0,1)),
+            created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS shape_assets (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            uuid            TEXT NOT NULL UNIQUE,
+            collection_id   INTEGER NOT NULL REFERENCES shape_collections(id) ON DELETE CASCADE,
+            original_name   TEXT NULL,
+            file_path       TEXT NOT NULL,
+            size_bytes      INTEGER NULL,
+            comment         TEXT NULL DEFAULT '',
+            tier            TEXT NOT NULL DEFAULT 'free' CHECK (tier IN ('free','plus','premium')),
+            sort_order      INTEGER NOT NULL DEFAULT 0,
+            active          INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0,1)),
+            created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_shape_assets_collection ON shape_assets(collection_id);
     ");
 
     // phrase_collections may already exist (created by an earlier version of

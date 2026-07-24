@@ -352,6 +352,175 @@ try {
             }
             break;
 
+        // --------------------------------------------------------------- shapes
+        case 'shapes':
+            $backTo = !empty($_POST['collection_id']) ? 'index.php?page=shapes&collection=' . (int) $_POST['collection_id'] : 'index.php?page=shapes';
+
+            if ($action === 'collection_save') {
+                $id = (int) ($_POST['id'] ?? 0);
+                if (empty($_POST['tier'])) {
+                    flashRedirect('error', 'Tier é obrigatório.', 'index.php?page=shapes');
+                }
+                if ($id > 0) {
+                    shapeCollectionUpdate($id, $_POST);
+                    auditLog($adminId, 'update', 'shape_collections', (string) $id);
+                    flashRedirect('success', 'Coleção atualizada.', 'index.php?page=shapes');
+                }
+                $newId = shapeCollectionCreate($_POST);
+                auditLog($adminId, 'create', 'shape_collections', (string) $newId);
+                flashRedirect('success', 'Coleção criada.', 'index.php?page=shapes');
+            }
+
+            if ($action === 'collection_delete') {
+                $id = (int) ($_POST['id'] ?? 0);
+                $col = shapeCollectionFind($id);
+                if ($col) {
+                    $dir = CRAFTOOLS_API_ROOT . '/public/v1/shapes/' . $col['uuid'];
+                    removeDirRecursive($dir);
+                }
+                shapeCollectionDelete($id);
+                auditLog($adminId, 'delete', 'shape_collections', (string) $id);
+                flashRedirect('success', 'Coleção e shapes removidos.', 'index.php?page=shapes');
+            }
+
+            if ($action === 'shape_upload') {
+                $collectionId = (int) ($_POST['collection_id'] ?? 0);
+                $col = shapeCollectionFind($collectionId);
+                if (!$col) {
+                    flashRedirect('error', 'Coleção inválida.', 'index.php?page=shapes');
+                }
+                if (empty($_FILES['shape']) || $_FILES['shape']['error'] === UPLOAD_ERR_NO_FILE) {
+                    flashRedirect('error', 'Selecione um arquivo SVG.', $backTo);
+                }
+                try {
+                    $shapeUuid = uuidv4();
+                    $destPath = CRAFTOOLS_API_ROOT . '/public/v1/shapes/' . $col['uuid'] . '/' . $shapeUuid . '.svg';
+                    $meta = handleSvgUpload($_FILES['shape'], $destPath);
+                    $newId = shapeAssetCreate([
+                        'collection_id' => $collectionId,
+                        'original_name' => $_FILES['shape']['name'],
+                        'file_path' => 'v1/shapes/' . $col['uuid'] . '/' . $shapeUuid . '.svg',
+                        'size_bytes' => $meta['size_bytes'],
+                        'comment' => $_POST['comment'] ?? '',
+                        'tier' => $_POST['tier'] ?? $col['tier'],
+                    ]);
+                    // Usa o mesmo uuid gerado para nome de arquivo e registro, mantendo consistência.
+                    db()->prepare('UPDATE shape_assets SET uuid = ? WHERE id = ?')->execute([$shapeUuid, $newId]);
+                    auditLog($adminId, 'create', 'shape_assets', (string) $newId);
+                    flashRedirect('success', 'Shape enviado e sanitizado.', $backTo);
+                } catch (RuntimeException $ex) {
+                    flashRedirect('error', $ex->getMessage(), $backTo);
+                }
+            }
+
+            if ($action === 'shape_update') {
+                $id = (int) ($_POST['id'] ?? 0);
+                shapeAssetUpdate($id, $_POST);
+                auditLog($adminId, 'update', 'shape_assets', (string) $id);
+                flashRedirect('success', 'Shape atualizado.', $backTo);
+            }
+
+            if ($action === 'shape_delete') {
+                $id = (int) ($_POST['id'] ?? 0);
+                $shape = shapeAssetFind($id);
+                if ($shape && !empty($shape['file_path'])) {
+                    $full = CRAFTOOLS_API_ROOT . '/public/' . $shape['file_path'];
+                    assertPathInsideBase(dirname($full), CRAFTOOLS_API_ROOT . '/public/v1/shapes');
+                    @unlink($full);
+                }
+                shapeAssetDelete($id);
+                auditLog($adminId, 'delete', 'shape_assets', (string) $id);
+                flashRedirect('success', 'Shape removido.', $backTo);
+            }
+
+            // Importação em lote a partir de assets/original/shapes/{pack}/*.svg —
+            // síncrona (diferente do importador de imagens em bulk_import_ajax.php,
+            // que processa em lotes via AJAX): shapes SVG são arquivos de texto
+            // pequenos (dezenas de KB no total por pack), então uma única
+            // requisição é rápida o bastante para não precisar de barra de
+            // progresso/lotes.
+            if ($action === 'shapes_bulk_import') {
+                $baseDir = CRAFTOOLS_API_ROOT . '/assets/original/shapes';
+                if (!is_dir($baseDir)) {
+                    flashRedirect('error', 'Pasta assets/original/shapes/ não encontrada no servidor.', 'index.php?page=shapes');
+                }
+
+                $imported = 0;
+                $skipped = 0;
+                $errors = [];
+
+                foreach (new DirectoryIterator($baseDir) as $dirInfo) {
+                    if ($dirInfo->isDot() || !$dirInfo->isDir()) {
+                        continue;
+                    }
+                    $packName = $dirInfo->getFilename();
+                    $originalPath = 'assets/original/shapes/' . $packName;
+
+                    $col = shapeCollectionFindByOriginalPath($originalPath);
+                    if (!$col) {
+                        $colId = shapeCollectionCreate([
+                            'name' => $packName,
+                            'comment' => $packName,
+                            'original_path' => $originalPath,
+                            'tier' => 'free',
+                            'sort_order' => 0,
+                            'active' => 1,
+                        ]);
+                        auditLog($adminId, 'create', 'shape_collections', (string) $colId);
+                        $col = shapeCollectionFind($colId);
+                    }
+
+                    // Reimportar não deve duplicar: pula qualquer arquivo cujo
+                    // original_name já exista nesta coleção.
+                    $already = array_column(shapeAssetsByCollection($col['id']), null, 'original_name');
+
+                    foreach (new DirectoryIterator($dirInfo->getPathname()) as $fileInfo) {
+                        if ($fileInfo->isDot() || !$fileInfo->isFile()) {
+                            continue;
+                        }
+                        if (strtolower($fileInfo->getExtension()) !== 'svg') {
+                            continue;
+                        }
+                        $fileName = $fileInfo->getFilename();
+                        if (isset($already[$fileName])) {
+                            $skipped++;
+                            continue;
+                        }
+
+                        try {
+                            $raw = file_get_contents($fileInfo->getPathname());
+                            if ($raw === false) {
+                                throw new RuntimeException('Falha ao ler o arquivo.');
+                            }
+                            $shapeUuid = uuidv4();
+                            $destPath = CRAFTOOLS_API_ROOT . '/public/v1/shapes/' . $col['uuid'] . '/' . $shapeUuid . '.svg';
+                            $meta = writeSanitizedSvg($raw, $destPath);
+                            $newId = shapeAssetCreate([
+                                'collection_id' => (int) $col['id'],
+                                'original_name' => $fileName,
+                                'file_path' => 'v1/shapes/' . $col['uuid'] . '/' . $shapeUuid . '.svg',
+                                'size_bytes' => $meta['size_bytes'],
+                                'comment' => '',
+                                'tier' => 'free',
+                            ]);
+                            db()->prepare('UPDATE shape_assets SET uuid = ? WHERE id = ?')->execute([$shapeUuid, $newId]);
+                            auditLog($adminId, 'create', 'shape_assets', (string) $newId);
+                            $imported++;
+                        } catch (Throwable $ex) {
+                            $errors[] = $packName . '/' . $fileName . ': ' . $ex->getMessage();
+                        }
+                    }
+                }
+
+                $msg = "Importação concluída: {$imported} shape(s) importado(s), {$skipped} já existiam.";
+                if ($errors) {
+                    $msg .= ' Erros: ' . implode(' | ', array_slice($errors, 0, 5)) . (count($errors) > 5 ? ' …' : '');
+                    flashRedirect('error', $msg, 'index.php?page=shapes');
+                }
+                flashRedirect('success', $msg, 'index.php?page=shapes');
+            }
+            break;
+
         // --------------------------------------------------------- calendar_dates
         case 'calendar_dates':
             if ($action === 'save') {

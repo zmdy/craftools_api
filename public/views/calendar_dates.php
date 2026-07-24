@@ -10,10 +10,33 @@ $editId         = (int) ($_GET['edit'] ?? 0);
 $editing        = $editId > 0 ? calendarEntryFind($editId) : null;
 $filterCategory = (string) ($_GET['category'] ?? '');
 $filterMonth    = (string) ($_GET['month'] ?? '');
+
+// Pagination -- previously calendarEntryList() had no LIMIT at all, so this
+// view fetched and rendered EVERY matching row in one page load (fine for a
+// handful of manual entries, but the feriados-brasil/ANBIMA/apicdata
+// importers can each add hundreds of rows in one run).
+$listPage       = max(1, (int) ($_GET['lp'] ?? 1));
+$listPerPage    = 50;
+$listOffset     = ($listPage - 1) * $listPerPage;
 $rows           = calendarEntryList(
+    $filterCategory !== '' ? $filterCategory : null,
+    $filterMonth !== '' ? (int) $filterMonth : null,
+    null,
+    null,
+    $listPerPage,
+    $listOffset
+);
+$listTotal      = calendarEntryListCount(
     $filterCategory !== '' ? $filterCategory : null,
     $filterMonth !== '' ? (int) $filterMonth : null
 );
+$listTotalPages = max(1, (int) ceil($listTotal / $listPerPage));
+$baseQs         = http_build_query(array_filter([
+    'page'     => 'calendar_dates',
+    'category' => $filterCategory,
+    'month'    => $filterMonth,
+], static function ($v) { return $v !== ''; }));
+
 $sources = calendarEntrySources();
 
 $categoryLabels = [
@@ -124,27 +147,9 @@ $monthLabels = [1 => 'Janeiro', 2 => 'Fevereiro', 3 => 'Março', 4 => 'Abril', 5
 
 <div class="card">
     <div class="card-head">
-        <h2>Registros cadastrados (<?= count($rows) ?>)</h2>
+        <h2>Registros cadastrados (<?= number_format($listTotal, 0, ',', '.') ?>)</h2>
         <div class="d-flex gap-2" style="flex-wrap:wrap; align-items:center;">
-            <form method="get" action="index.php" class="d-flex gap-2" style="flex-wrap:wrap;">
-                <input type="hidden" name="page" value="calendar_dates">
-                <select name="category" data-autosubmit>
-                    <option value="">Todas as categorias</option>
-                    <?php foreach ($categoryLabels as $val => $label): ?>
-                        <option value="<?= $val ?>" <?= $filterCategory === $val ? 'selected' : '' ?>><?= $label ?></option>
-                    <?php endforeach; ?>
-                </select>
-                <select name="month" data-autosubmit>
-                    <option value="">Todos os meses</option>
-                    <?php foreach ($monthLabels as $val => $label): ?>
-                        <option value="<?= $val ?>" <?= $filterMonth === (string) $val ? 'selected' : '' ?>><?= $label ?></option>
-                    <?php endforeach; ?>
-                </select>
-                <?php if ($filterCategory !== '' || $filterMonth !== ''): ?>
-                    <a href="index.php?page=calendar_dates" class="btn btn-outline btn-sm">Limpar filtros</a>
-                <?php endif; ?>
-            </form>
-            <a href="index.php?page=calendar_dates_feriados_brasil_import" class="btn btn-outline btn-sm" style="margin-left:auto;">
+            <a href="index.php?page=calendar_dates_feriados_brasil_import" class="btn btn-outline btn-sm">
                 <span class="material-symbols-outlined" style="font-size:15px;">cloud_download</span> Importar dados de exemplo (feriados)
             </a>
             <a href="index.php?page=calendar_dates_api_import" class="btn btn-outline btn-sm">
@@ -154,6 +159,34 @@ $monthLabels = [1 => 'Janeiro', 2 => 'Fevereiro', 3 => 'Março', 4 => 'Abril', 5
                 <span class="material-symbols-outlined" style="font-size:15px;">upload_file</span> Importar CSV
             </a>
         </div>
+    </div>
+
+    <div class="card-body" style="border-bottom:1px solid var(--border);">
+        <form method="get" action="index.php" class="d-flex gap-2" style="flex-wrap:wrap; align-items:flex-end;">
+            <input type="hidden" name="page" value="calendar_dates">
+            <div class="field">
+                <label>Categoria</label>
+                <select name="category" data-autosubmit>
+                    <option value="">Todas as categorias</option>
+                    <?php foreach ($categoryLabels as $val => $label): ?>
+                        <option value="<?= $val ?>" <?= $filterCategory === $val ? 'selected' : '' ?>><?= $label ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="field">
+                <label>Mês</label>
+                <select name="month" data-autosubmit>
+                    <option value="">Todos os meses</option>
+                    <?php foreach ($monthLabels as $val => $label): ?>
+                        <option value="<?= $val ?>" <?= $filterMonth === (string) $val ? 'selected' : '' ?>><?= $label ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-outline btn-sm">Filtrar</button>
+            <?php if ($filterCategory !== '' || $filterMonth !== ''): ?>
+                <a href="index.php?page=calendar_dates" class="btn btn-outline btn-sm">Limpar filtros</a>
+            <?php endif; ?>
+        </form>
     </div>
 
     <div class="card-body flush">
@@ -193,6 +226,13 @@ $monthLabels = [1 => 'Janeiro', 2 => 'Fevereiro', 3 => 'Março', 4 => 'Abril', 5
             </tbody>
         </table>
     </div>
+    <?php if ($listTotalPages > 1): ?>
+    <div class="card-body d-flex" style="justify-content:center; gap:6px; align-items:center; border-top:1px solid var(--border);">
+        <a href="index.php?<?= $baseQs ?>&lp=<?= max(1, $listPage - 1) ?>" class="btn btn-outline btn-sm" <?= $listPage <= 1 ? 'style="pointer-events:none;opacity:.4;"' : '' ?>>Anterior</a>
+        <span class="text-muted" style="font-size:12.5px;">Página <?= $listPage ?> de <?= $listTotalPages ?></span>
+        <a href="index.php?<?= $baseQs ?>&lp=<?= min($listTotalPages, $listPage + 1) ?>" class="btn btn-outline btn-sm" <?= $listPage >= $listTotalPages ? 'style="pointer-events:none;opacity:.4;"' : '' ?>>Próxima</a>
+    </div>
+    <?php endif; ?>
 </div>
 
 <script src="assets/calendar-dates.js"></script>
