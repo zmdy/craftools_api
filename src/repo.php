@@ -1357,6 +1357,65 @@ function calendarEntryReplaceFromSource(string $category, int $month, int $day, 
     }
 }
 
+/**
+ * Substitui em bloco TODOS os registros vindos de uma fonte específica, numa
+ * única transação -- usada pelo importador do feriados-brasil (ver
+ * calendar_dates_feriados_brasil_import_ajax.php), que baixa o ano inteiro
+ * de uma vez (3 requisições HTTP de saída, uma por categoria) em vez de dia
+ * a dia como calendar_dates_api_import_ajax.php precisa fazer (aquela API
+ * externa só responde uma data por chamada). Diferente de
+ * calendarEntryReplaceFromSource() (que troca só uma categoria+data por
+ * vez), esta função:
+ *   - aceita itens de QUALQUER mês/dia numa única chamada, apagando por
+ *     `source` sozinho (não por categoria+mês+dia) -- reimportar troca a
+ *     base inteira desta fonte de uma vez, o que é o que se quer ao rodar
+ *     de novo pra atualizar feriados de data móvel (Sexta-Feira Santa,
+ *     Carnaval-RJ, Dia das Mães/Pais) para o ano importado mais recente;
+ *   - aceita os campos extras de 'holiday' (scope/uf) que
+ *     calendarEntryReplaceFromSource() não tem porque o importador da API
+ *     externa nunca lida com feriados (só comemorações/santos/eventos).
+ * Cadastros manuais ou vindos de CSV/outra fonte nunca são afetados.
+ * @param array<int,array{category:string,month:int,day:int,title:string,description?:?string,scope?:?string,uf?:?string}> $items
+ * @return int quantidade de itens inseridos
+ */
+function calendarEntryReplaceYearFromSource(string $source, array $items): int {
+    $pdo = db();
+    $pdo->beginTransaction();
+    try {
+        $del = $pdo->prepare('DELETE FROM calendar_entries WHERE source = ?');
+        $del->execute([$source]);
+
+        $count = 0;
+        foreach ($items as $item) {
+            $title = trim((string) ($item['title'] ?? ''));
+            $month = (int) ($item['month'] ?? 0);
+            $day   = (int) ($item['day'] ?? 0);
+            if ($title === '' || empty($item['category']) || $month < 1 || $month > 12 || $day < 1 || $day > 31) {
+                continue;
+            }
+            calendarEntryCreate([
+                'category'      => (string) $item['category'],
+                'month'         => $month,
+                'day'           => $day,
+                'title'         => $title,
+                'description'   => $item['description'] ?? null,
+                'holiday_scope' => $item['scope'] ?? null,
+                'uf'            => $item['uf'] ?? null,
+                'source'        => $source,
+                'tier'          => 'free',
+                'active'        => 1,
+            ]);
+            $count++;
+        }
+
+        $pdo->commit();
+        return $count;
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        throw $e;
+    }
+}
+
 /** Distinct sources cadastradas -- usado pelo painel admin para filtro/feedback do importador externo. */
 function calendarEntrySources(): array {
     $rows = db()->query("SELECT DISTINCT source FROM calendar_entries WHERE source IS NOT NULL AND source <> '' ORDER BY source")->fetchAll();

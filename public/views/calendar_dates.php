@@ -144,8 +144,11 @@ $monthLabels = [1 => 'Janeiro', 2 => 'Fevereiro', 3 => 'Março', 4 => 'Abril', 5
                     <a href="index.php?page=calendar_dates" class="btn btn-outline btn-sm">Limpar filtros</a>
                 <?php endif; ?>
             </form>
-            <a href="index.php?page=calendar_dates_api_import" class="btn btn-outline btn-sm" style="margin-left:auto;">
-                <span class="material-symbols-outlined" style="font-size:15px;">cloud_download</span> Importar dados de exemplo
+            <a href="index.php?page=calendar_dates_feriados_brasil_import" class="btn btn-outline btn-sm" style="margin-left:auto;">
+                <span class="material-symbols-outlined" style="font-size:15px;">cloud_download</span> Importar dados de exemplo (feriados)
+            </a>
+            <a href="index.php?page=calendar_dates_api_import" class="btn btn-outline btn-sm">
+                <span class="material-symbols-outlined" style="font-size:15px;">cloud_download</span> Importar dados de exemplo (comemorações)
             </a>
             <a href="index.php?page=calendar_dates_csv_import" class="btn btn-outline btn-sm">
                 <span class="material-symbols-outlined" style="font-size:15px;">upload_file</span> Importar CSV

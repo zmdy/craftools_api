@@ -31,6 +31,7 @@ $pageTitles = [
     'calendar_dates'            => ['Datas & Feriados', 'Feriados, comemorações, santos e eventos históricos por dia'],
     'calendar_dates_csv_import' => ['Importar Datas via CSV', 'Importação em massa de feriados/comemorações/santos/eventos'],
     'calendar_dates_api_import' => ['Importar Dados de Exemplo', 'Carrega comemorações/santos/eventos de apicdata.biduinfo.com.br'],
+    'calendar_dates_feriados_brasil_import' => ['Importar Dados de Exemplo', 'Carrega feriados nacionais/estaduais e datas comemorativas de github.com/joaopbini/feriados-brasil'],
     'api_logs'            => ['Logs de API', 'Todo acesso à API pública (/v1), com sucesso ou erro'],
 ];
 $title = $pageTitles[$page][0] ?? 'CraftTools API';
