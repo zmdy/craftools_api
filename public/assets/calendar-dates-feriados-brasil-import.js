@@ -11,7 +11,7 @@
 
     const CSRF = app.dataset.csrf;
 
-    const categoryLabels = { holiday: 'feriado(s)', commemoration: 'data(s) comemorativa(s)' };
+    const categoryLabels = { holiday: 'feriado(s)', commemoration_main: 'data(s) comemorativa(s) principal(is)' };
 
     startBtn.addEventListener('click', function () {
         const year = parseInt(yearInput.value, 10);

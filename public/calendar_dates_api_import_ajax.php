@@ -101,6 +101,13 @@ $counts = [];
 $fetchErrors = [];
 
 // ── comemoracoes -> {"comemoracoes": ["string", ...]} ──────────────────────
+// Tagged 'commemoration_misc' (not 'commemoration_main') -- this endpoint
+// returns a broad, largely uncurated list (often several items for the same
+// day), unlike the small hand-picked list the feriados-brasil/joaopbini
+// GitHub import produces. Keeping the two under separate categories is what
+// lets the SPECIAL_DATE variable's category filter actually mean something
+// (e.g. "only the important dates") instead of both being indistinguishable
+// rows under one bucket.
 $comemoracoes = calImportFetchJson(CALENDAR_API_IMPORT_BASE . '/comemoracoes/' . $mmdd);
 if ($comemoracoes !== null && !empty($comemoracoes['comemoracoes']) && is_array($comemoracoes['comemoracoes'])) {
     $items = [];
@@ -110,11 +117,11 @@ if ($comemoracoes !== null && !empty($comemoracoes['comemoracoes']) && is_array(
             $items[] = ['title' => $name];
         }
     }
-    $counts['commemoration'] = calendarEntryReplaceFromSource('commemoration', $month, $day, CALENDAR_API_IMPORT_SOURCE, $items);
+    $counts['commemoration_misc'] = calendarEntryReplaceFromSource('commemoration_misc', $month, $day, CALENDAR_API_IMPORT_SOURCE, $items);
 } elseif ($comemoracoes === null) {
     $fetchErrors[] = 'comemoracoes: falha ao consultar a API externa.';
 } else {
-    $counts['commemoration'] = calendarEntryReplaceFromSource('commemoration', $month, $day, CALENDAR_API_IMPORT_SOURCE, []);
+    $counts['commemoration_misc'] = calendarEntryReplaceFromSource('commemoration_misc', $month, $day, CALENDAR_API_IMPORT_SOURCE, []);
 }
 
 // ── eventos -> {"eventos": [{"ano":1900,"descricao":"..."}]} ───────────────

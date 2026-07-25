@@ -90,7 +90,7 @@ function ensureAdditiveSchema(PDO $pdo): void {
         CREATE TABLE IF NOT EXISTS calendar_entries (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
             uuid            TEXT NOT NULL UNIQUE,
-            category        TEXT NOT NULL CHECK (category IN ('holiday','commemoration','saint','event')),
+            category        TEXT NOT NULL CHECK (category IN ('holiday','commemoration_main','commemoration_misc','saint','event')),
             month           INTEGER NOT NULL CHECK (month BETWEEN 1 AND 12),
             day             INTEGER NOT NULL CHECK (day BETWEEN 1 AND 31),
             year            INTEGER NULL,
@@ -154,6 +154,88 @@ function ensureAdditiveSchema(PDO $pdo): void {
     }
     if (!$hasDescription) {
         $pdo->exec("ALTER TABLE phrase_collections ADD COLUMN description TEXT NOT NULL DEFAULT ''");
+    }
+
+    // calendar_entries.category used to allow a single 'commemoration' value
+    // covering two very different things: the small curated list of major
+    // commercial/cultural dates (Dia das Mães, Carnaval, etc -- imported
+    // from the feriados-brasil/joaopbini GitHub source) and the much
+    // broader, less curated list of daily "comemorações" the biduinfo API
+    // returns (often several per day). Mixing both under one category made
+    // any attempt to filter "just the important dates" effectively random,
+    // since both sources' rows were indistinguishable except by their
+    // `source` column. Split into 'commemoration_main'/'commemoration_misc'
+    // so the category itself carries that distinction everywhere it's
+    // already used (admin filters, the public API's grouped response, the
+    // SPECIAL_DATE variable's category checkboxes).
+    //
+    // SQLite can't ALTER a CHECK constraint in place, so an existing
+    // database (created before this migration existed, with the table
+    // above a no-op due to CREATE TABLE IF NOT EXISTS) needs a full
+    // rebuild: rename the old table, create the new one from the SQL
+    // above, copy every row across with 'commemoration' remapped by
+    // `source`, then drop the old table. Detected via sqlite_master's
+    // stored SQL text so this only ever runs once, is a no-op on a fresh
+    // install (table already created with the new CHECK above), and is a
+    // no-op again on every subsequent boot after the migration has run.
+    $calSql = $pdo->query(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'calendar_entries'"
+    )->fetchColumn();
+    if ($calSql !== false && strpos((string) $calSql, "'commemoration',") !== false) {
+        $pdo->beginTransaction();
+        try {
+            $pdo->exec('ALTER TABLE calendar_entries RENAME TO calendar_entries_old_commemoration_split');
+            $pdo->exec("
+                CREATE TABLE calendar_entries (
+                    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                    uuid            TEXT NOT NULL UNIQUE,
+                    category        TEXT NOT NULL CHECK (category IN ('holiday','commemoration_main','commemoration_misc','saint','event')),
+                    month           INTEGER NOT NULL CHECK (month BETWEEN 1 AND 12),
+                    day             INTEGER NOT NULL CHECK (day BETWEEN 1 AND 31),
+                    year            INTEGER NULL,
+                    title           TEXT NOT NULL,
+                    description     TEXT NULL,
+                    link            TEXT NULL,
+                    holiday_scope   TEXT NULL CHECK (holiday_scope IN ('national','state','municipal')),
+                    uf              TEXT NULL,
+                    city            TEXT NULL,
+                    source          TEXT NULL,
+                    tier            TEXT NOT NULL DEFAULT 'free' CHECK (tier IN ('free','plus','premium')),
+                    sort_order      INTEGER NOT NULL DEFAULT 0,
+                    active          INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0,1)),
+                    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+                    updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+                );
+                CREATE INDEX IF NOT EXISTS idx_calendar_entries_month_day ON calendar_entries(month, day);
+                CREATE INDEX IF NOT EXISTS idx_calendar_entries_category ON calendar_entries(category);
+                CREATE INDEX IF NOT EXISTS idx_calendar_entries_source ON calendar_entries(category, month, day, source);
+            ");
+            // 'apicdata.biduinfo.com.br' -> commemoration_misc (the broad,
+            // many-per-day API import); everything else that was tagged
+            // 'commemoration' -- the feriados-brasil/joaopbini import
+            // (source 'github.com/joaopbini/feriados-brasil') AND any
+            // manual/CSV row with no recognized bulk-import source -- goes
+            // to commemoration_main, since a manually curated entry is, by
+            // definition, one someone deliberately picked as noteworthy.
+            $pdo->exec("
+                INSERT INTO calendar_entries
+                    (id, uuid, category, month, day, year, title, description, link, holiday_scope, uf, city, source, tier, sort_order, active, created_at, updated_at)
+                SELECT
+                    id, uuid,
+                    CASE
+                        WHEN category = 'commemoration' AND source = 'apicdata.biduinfo.com.br' THEN 'commemoration_misc'
+                        WHEN category = 'commemoration' THEN 'commemoration_main'
+                        ELSE category
+                    END,
+                    month, day, year, title, description, link, holiday_scope, uf, city, source, tier, sort_order, active, created_at, updated_at
+                FROM calendar_entries_old_commemoration_split
+            ");
+            $pdo->exec('DROP TABLE calendar_entries_old_commemoration_split');
+            $pdo->commit();
+        } catch (Throwable $e) {
+            $pdo->rollBack();
+            throw $e;
+        }
     }
 }
 

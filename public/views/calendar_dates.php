@@ -40,10 +40,11 @@ $baseQs         = http_build_query(array_filter([
 $sources = calendarEntrySources();
 
 $categoryLabels = [
-    'holiday'       => 'Feriado',
-    'commemoration' => 'Comemoração',
-    'saint'         => 'Santo',
-    'event'         => 'Evento histórico',
+    'holiday'            => 'Feriado',
+    'commemoration_main' => 'Comemoração (principal)',
+    'commemoration_misc' => 'Comemoração (diversa)',
+    'saint'              => 'Santo do dia',
+    'event'              => 'Evento histórico',
 ];
 $scopeLabels = ['national' => 'Nacional', 'state' => 'Estadual', 'municipal' => 'Municipal'];
 $monthLabels = [1 => 'Janeiro', 2 => 'Fevereiro', 3 => 'Março', 4 => 'Abril', 5 => 'Maio', 6 => 'Junho',
@@ -61,7 +62,7 @@ $monthLabels = [1 => 'Janeiro', 2 => 'Fevereiro', 3 => 'Março', 4 => 'Abril', 5
                     <label>Categoria</label>
                     <select name="category" id="cal-category">
                         <?php foreach ($categoryLabels as $val => $label): ?>
-                            <option value="<?= $val ?>" <?= ($editing['category'] ?? 'commemoration') === $val ? 'selected' : '' ?>><?= $label ?></option>
+                            <option value="<?= $val ?>" <?= ($editing['category'] ?? 'commemoration_main') === $val ? 'selected' : '' ?>><?= $label ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
@@ -201,13 +202,27 @@ $monthLabels = [1 => 'Janeiro', 2 => 'Fevereiro', 3 => 'Março', 4 => 'Abril', 5
                     <td class="mono"><?= str_pad((string) $r['day'], 2, '0', STR_PAD_LEFT) ?>/<?= str_pad((string) $r['month'], 2, '0', STR_PAD_LEFT) ?></td>
                     <td><span class="badge" style="background:rgba(99,102,241,.1);color:#6366f1;"><?= e($categoryLabels[$r['category']] ?? $r['category']) ?></span></td>
                     <td style="max-width:280px;"><?= e(mb_strimwidth($r['title'], 0, 100, '…')) ?></td>
-                    <td class="text-muted">
+                    <td class="text-muted" style="max-width:220px;">
+                        <?php
+                        // Category-specific detail first (year/scope/source
+                        // link, as before); falls back to the generic
+                        // `description` column -- previously shown nowhere
+                        // in this list at all, even when a row actually had
+                        // one, which made it look like the field was dead.
+                        // Both can't apply to the same row today (only
+                        // 'event'/'holiday'/'saint' use the specific ones),
+                        // but showing description as the fallback rather
+                        // than unconditionally means a row's category-
+                        // specific detail is never hidden behind it.
+                        ?>
                         <?php if ($r['category'] === 'event' && $r['year']): ?>
                             Ano <?= (int) $r['year'] ?>
                         <?php elseif ($r['category'] === 'holiday'): ?>
                             <?= e($scopeLabels[$r['holiday_scope'] ?? 'national'] ?? '') ?><?= !empty($r['uf']) ? ' — ' . e($r['uf']) : '' ?><?= !empty($r['city']) ? '/' . e($r['city']) : '' ?>
                         <?php elseif ($r['category'] === 'saint' && !empty($r['link'])): ?>
                             <a href="<?= e($r['link']) ?>" target="_blank" rel="noopener">fonte ↗</a>
+                        <?php elseif (!empty($r['description'])): ?>
+                            <?= e(mb_strimwidth($r['description'], 0, 80, '…')) ?>
                         <?php else: ?>—<?php endif; ?>
                     </td>
                     <td class="text-muted"><?= e($r['source'] ?: 'manual') ?></td>

@@ -21,7 +21,7 @@
     const CSRF         = app.dataset.csrf;
     const BATCH        = 50;
     const VALID_TIERS  = ['free', 'plus', 'premium'];
-    const VALID_CATEGORIES = ['holiday', 'commemoration', 'saint', 'event'];
+    const VALID_CATEGORIES = ['holiday', 'commemoration_main', 'commemoration_misc', 'saint', 'event'];
     const VALID_SCOPES = ['national', 'state', 'municipal'];
 
     let parsedRows = [];

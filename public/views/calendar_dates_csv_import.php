@@ -24,7 +24,7 @@ $existingSources = calendarEntrySources();
                             </tr>
                         </thead>
                         <tbody>
-                            <tr><td>1</td><td><code>category</code></td><td>✔</td><td>holiday / commemoration / saint / event</td></tr>
+                            <tr><td>1</td><td><code>category</code></td><td>✔</td><td>holiday / commemoration_main / commemoration_misc / saint / event</td></tr>
                             <tr><td>2</td><td><code>month</code></td><td>✔</td><td>9</td></tr>
                             <tr><td>3</td><td><code>day</code></td><td>✔</td><td>7</td></tr>
                             <tr><td>4</td><td><code>title</code></td><td>✔</td><td>Independência do Brasil</td></tr>

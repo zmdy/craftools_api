@@ -293,7 +293,14 @@ if ($comemorativas === null) {
             continue;
         }
         $items[] = [
-            'category'    => 'commemoration',
+            // This GitHub source is a small, hand-curated list of the main
+            // commercial/cultural dates (Dia das Mães, Carnaval, Páscoa,
+            // etc) -- distinct from the much broader, less curated
+            // 'commemoration_misc' list the biduinfo API import produces
+            // (see calendar_dates_api_import_ajax.php), so it gets its own
+            // category rather than sharing the old single 'commemoration'
+            // bucket the two used to be indistinguishable under.
+            'category'    => 'commemoration_main',
             'day'         => $dm[0],
             'month'       => $dm[1],
             'title'       => $title,
@@ -312,7 +319,7 @@ try {
     fbImportJsonError(500, 'Falha ao gravar os registros: ' . $e->getMessage());
 }
 
-$counts = ['holiday' => 0, 'commemoration' => 0];
+$counts = ['holiday' => 0, 'commemoration_main' => 0];
 foreach ($items as $item) {
     $counts[$item['category']] = ($counts[$item['category']] ?? 0) + 1;
 }

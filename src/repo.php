@@ -1349,18 +1349,29 @@ function apiAccessLogStats(): array {
 }
 
 // ============================================================================
-// calendar_entries — feriados / comemorações / santos / eventos históricos
+// calendar_entries — feriados / comemorações (principais + diversas) /
+// santos do dia / eventos históricos
 // ============================================================================
 
-const CALENDAR_ENTRY_CATEGORIES = ['holiday', 'commemoration', 'saint', 'event'];
+// 'commemoration' used to be a single category covering both the small
+// curated list of major commercial/cultural dates (feriados-brasil/joaopbini
+// GitHub import -- Dia das Mães, Carnaval, etc) and the much broader,
+// less curated list the biduinfo API returns (often several per day). Split
+// into 'commemoration_main'/'commemoration_misc' so that distinction is
+// explicit everywhere (admin filters, the public API's grouped response,
+// the SPECIAL_DATE variable's category checkboxes) instead of both kinds
+// being indistinguishable rows under one bucket. See db.php's
+// ensureAdditiveSchema() for the one-time migration of existing rows.
+const CALENDAR_ENTRY_CATEGORIES = ['holiday', 'commemoration_main', 'commemoration_misc', 'saint', 'event'];
 const CALENDAR_ENTRY_SCOPES     = ['national', 'state', 'municipal'];
 
 /** Mapa categoria interna -> chave usada na resposta agrupada da API pública (ambas em inglês). */
 const CALENDAR_ENTRY_API_GROUPS = [
-    'holiday'       => 'holidays',
-    'commemoration' => 'commemorations',
-    'saint'         => 'saints',
-    'event'         => 'events',
+    'holiday'            => 'holidays',
+    'commemoration_main' => 'commemorationsMain',
+    'commemoration_misc' => 'commemorationsMisc',
+    'saint'              => 'saints',
+    'event'              => 'events',
 ];
 
 /**
@@ -1465,7 +1476,7 @@ function calendarEntryDelete(int $id): void {
  * depois de uma edição que mude a categoria.
  */
 function calendarEntryRowFromInput(array $d): array {
-    $category = in_array($d['category'] ?? '', CALENDAR_ENTRY_CATEGORIES, true) ? $d['category'] : 'commemoration';
+    $category = in_array($d['category'] ?? '', CALENDAR_ENTRY_CATEGORIES, true) ? $d['category'] : 'commemoration_main';
     $month = max(1, min(12, (int) ($d['month'] ?? 0)));
     $day   = max(1, min(31, (int) ($d['day'] ?? 0)));
 
@@ -1540,8 +1551,9 @@ function calendarEntryToApiShape(array $row): array {
 
 /**
  * Consulta principal da API pública: tudo cadastrado para um mês/dia,
- * filtrado por tier e agrupado nas 4 categorias pedidas (chaves em inglês --
- * holidays/commemorations/saints/events -- espelhando CALENDAR_ENTRY_CATEGORIES).
+ * filtrado por tier e agrupado nas 5 categorias pedidas (chaves em inglês --
+ * holidays/commemorationsMain/commemorationsMisc/saints/events -- espelhando
+ * CALENDAR_ENTRY_CATEGORIES).
  */
 function calendarEntryForDate(string $tier, int $month, int $day): array {
     $stmt = db()->prepare(
@@ -1550,7 +1562,7 @@ function calendarEntryForDate(string $tier, int $month, int $day): array {
     );
     $stmt->execute([$month, $day]);
 
-    $out = ['holidays' => [], 'commemorations' => [], 'saints' => [], 'events' => []];
+    $out = ['holidays' => [], 'commemorationsMain' => [], 'commemorationsMisc' => [], 'saints' => [], 'events' => []];
     foreach ($stmt->fetchAll() as $row) {
         if (!tierAtLeast($tier, $row['tier'])) {
             continue;

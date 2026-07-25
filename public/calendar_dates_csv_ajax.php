@@ -6,7 +6,7 @@
  * POST  items=<JSON array>   — insere um lote (máx. 50 por requisição)
  *
  * Cada item do array deve conter:
- *   category      (string, obrigatório: holiday|commemoration|saint|event)
+ *   category      (string, obrigatório: holiday|commemoration_main|commemoration_misc|saint|event)
  *   month, day    (int, obrigatórios)
  *   title         (string, obrigatório)
  *   year          (int, obrigatório se category === 'event')

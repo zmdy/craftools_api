@@ -100,7 +100,7 @@
 
         var total = dates.length;
         var done = 0;
-        var totalsByCategory = { commemoration: 0, event: 0, saint: 0 };
+        var totalsByCategory = { commemoration_misc: 0, event: 0, saint: 0 };
         var errLines = [];
         var idx = 0;
 
@@ -110,10 +110,10 @@
                 startBtn.disabled = false;
                 stopBtn.hidden = true;
                 doneBox.hidden = false;
-                var grandTotal = totalsByCategory.commemoration + totalsByCategory.event + totalsByCategory.saint;
+                var grandTotal = totalsByCategory.commemoration_misc + totalsByCategory.event + totalsByCategory.saint;
                 doneMsg.textContent = (stopRequested ? 'Importação interrompida. ' : 'Importação concluída. ') +
                     grandTotal + ' item(ns) gravado(s) — ' +
-                    totalsByCategory.commemoration + ' comemoração(ões), ' +
+                    totalsByCategory.commemoration_misc + ' comemoração(ões) diversa(s), ' +
                     totalsByCategory.event + ' evento(s), ' +
                     totalsByCategory.saint + ' santo(s).';
 
@@ -144,7 +144,7 @@
                 .then(function (data) {
                     if (data.status !== 'success') throw new Error(data.message || 'Erro desconhecido');
                     var counts = data.data.counts || {};
-                    totalsByCategory.commemoration += counts.commemoration || 0;
+                    totalsByCategory.commemoration_misc += counts.commemoration_misc || 0;
                     totalsByCategory.event += counts.event || 0;
                     totalsByCategory.saint += counts.saint || 0;
                     (data.data.errors || []).forEach(function (msg) {

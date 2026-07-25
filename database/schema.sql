@@ -305,13 +305,16 @@ CREATE TABLE IF NOT EXISTS upload_links (
 CREATE INDEX IF NOT EXISTS idx_upload_links_hash ON upload_links(token_hash);
 
 -- ── Datas comemorativas / feriados / santos / eventos históricos ────────────
--- Tabela única (categoria como discriminador) em vez de 4 tabelas separadas --
+-- Tabela única (categoria como discriminador) em vez de 5 tabelas separadas --
 -- todas as categorias compartilham a mesma consulta de acesso (mês+dia) e o
 -- mesmo import CSV, só variam em quais colunas opcionais preenchem:
---   holiday      -> title, holiday_scope, uf (se state/municipal), city (se municipal)
---   commemoration-> title
---   saint        -> title (nome), link (fonte, opcional)
---   event        -> title (descrição do evento), year (ano em que ocorreu)
+--   holiday             -> title, holiday_scope, uf (se state/municipal), city (se municipal)
+--   commemoration_main  -> title (datas comerciais/culturais principais -- Dia das Mães,
+--                          Carnaval, Páscoa etc -- curadas, ex.: import feriados-brasil/joaopbini)
+--   commemoration_misc  -> title (lista ampla/pouco curada de comemorações diversas,
+--                          ex.: import da API biduinfo, geralmente várias por dia)
+--   saint               -> title (nome), link (fonte, opcional)
+--   event               -> title (descrição do evento), year (ano em que ocorreu)
 -- year é NULL para itens recorrentes anuais (feriados/comemorações/santos);
 -- em "event" guarda o ano histórico do fato. source identifica a origem do
 -- registro ('manual', 'csv' ou o domínio da API externa) -- usado para poder
@@ -320,7 +323,7 @@ CREATE INDEX IF NOT EXISTS idx_upload_links_hash ON upload_links(token_hash);
 CREATE TABLE IF NOT EXISTS calendar_entries (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     uuid            TEXT NOT NULL UNIQUE,
-    category        TEXT NOT NULL CHECK (category IN ('holiday','commemoration','saint','event')),
+    category        TEXT NOT NULL CHECK (category IN ('holiday','commemoration_main','commemoration_misc','saint','event')),
     month           INTEGER NOT NULL CHECK (month BETWEEN 1 AND 12),
     day             INTEGER NOT NULL CHECK (day BETWEEN 1 AND 31),
     year            INTEGER NULL,
