@@ -29,6 +29,25 @@ $recentAudit = db()->query('SELECT * FROM audit_log ORDER BY id DESC LIMIT 8')->
     </div>
 </div>
 
+<div class="card">
+    <div class="card-head">
+        <h2><span class="material-symbols-outlined" style="vertical-align:middle;margin-right:6px;">cloud_download</span> Atualização e Sincronização do Sistema</h2>
+    </div>
+    <div class="card-body">
+        <p style="margin:0 0 14px;color:var(--text-secondary);font-size:13.5px;line-height:1.5;">
+            Sincronize o código-fonte deste servidor com a versão mais recente publicada no repositório do <strong>GitHub</strong> (branch <code>main</code>).
+            O processo faz o download de <code>https://github.com/zmdy/craftools_api/archive/refs/heads/main.zip</code> e substitui os arquivos do sistema automaticamente (as configurações de <code>.env</code> e arquivos de uploads permanecem intactos).
+        </p>
+        <form method="post" action="index.php?page=dashboard" data-confirm="Deseja atualizar o sistema agora com o código mais recente do GitHub?">
+            <?= csrfField() ?>
+            <input type="hidden" name="_action" value="sync_github">
+            <button type="submit" class="btn btn-primary">
+                <span class="material-symbols-outlined">sync</span> Sincronizar com GitHub (main)
+            </button>
+        </form>
+    </div>
+</div>
+
 <div class="field-row">
     <div class="card mb-0">
         <div class="card-head"><h2>Últimas tentativas de login</h2></div>

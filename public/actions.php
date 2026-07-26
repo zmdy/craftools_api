@@ -19,6 +19,13 @@ function flashRedirect(string $type, string $msg, string $location): void {
 $action = (string) ($_POST['_action'] ?? '');
 
 try {
+    if ($action === 'sync_github') {
+        $result = syncSystemFromGithub();
+        auditLog($adminId, 'sync_github', 'system', 'GitHub main branch update');
+        $backTo = 'index.php?page=' . (in_array($page, ['login', 'logout'], true) ? 'dashboard' : $page);
+        flashRedirect('success', $result['message'], $backTo);
+    }
+
     switch ($page) {
 
         // ---------------------------------------------------------------- users

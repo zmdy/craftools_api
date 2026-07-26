@@ -94,7 +94,15 @@ $subtitle = $pageTitles[$page][1] ?? '';
                     <?php if ($subtitle): ?><div class="header-sub"><?= e($subtitle) ?></div><?php endif; ?>
                 </div>
             </div>
-            <div class="header-content">
+            <div class="header-content d-flex gap-2 align-items-center" style="gap:10px;">
+                <form method="post" action="index.php?page=<?= e($page) ?>" style="margin:0;display:inline;" data-confirm="Deseja atualizar o código-fonte do sistema baixando a versão mais recente do GitHub (main branch)?">
+                    <?= csrfField() ?>
+                    <input type="hidden" name="_action" value="sync_github">
+                    <button class="btn btn-outline btn-sm d-flex align-items-center gap-1" type="submit" title="Baixar e atualizar código-fonte do GitHub" style="padding:6px 12px;font-size:13px;">
+                        <span class="material-symbols-outlined" style="font-size:18px;">sync</span>
+                        <span>Sincronizar GitHub</span>
+                    </button>
+                </form>
                 <button class="box-icon" id="theme-toggle" type="button" aria-label="Alternar tema">
                     <span class="material-symbols-outlined" id="theme-toggle-icon">dark_mode</span>
                 </button>
