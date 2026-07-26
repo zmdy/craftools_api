@@ -15,7 +15,7 @@ if (adminCountActive() === 0) {
     exit;
 }
 
-$validPages = ['login', 'logout', 'dashboard', 'users', 'tokens', 'grid_sizes', 'album_templates', 'assets', 'shapes', 'phrases', 'phrases_csv_import', 'phrase_collections', 'bulk_import', 'upload_links', 'emoji_kitchen', 'api_logs', 'calendar_dates', 'calendar_dates_csv_import', 'calendar_dates_api_import', 'calendar_dates_feriados_brasil_import'];
+$validPages = ['login', 'logout', 'dashboard', 'users', 'tokens', 'grid_sizes', 'album_templates', 'assets', 'shapes', 'fonts', 'phrases', 'phrases_csv_import', 'phrase_collections', 'bulk_import', 'upload_links', 'emoji_kitchen', 'api_logs', 'calendar_dates', 'calendar_dates_csv_import', 'calendar_dates_api_import', 'calendar_dates_feriados_brasil_import'];
 $page = (string) ($_GET['page'] ?? 'dashboard');
 if (!in_array($page, $validPages, true)) {
     $page = 'dashboard';
