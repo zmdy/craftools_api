@@ -1766,17 +1766,16 @@ function fontFileDelete(int $id): void {
  * Monta o catálogo público de fontes filtrado por tier ([{id, name, category, tier, files: [{weight, style, format, api_url}]}])
  */
 function fontFamiliesForApi(string $tier): array {
-    $sql = 'SELECT * FROM font_families WHERE active = 1';
-    $tierOrder = tierAllowedList($tier);
-    $inClause = implode(',', array_fill(0, count($tierOrder), '?'));
-    $sql .= " AND tier IN ($inClause) ORDER BY sort_order ASC, id ASC";
-
+    $sql = 'SELECT * FROM font_families WHERE active = 1 ORDER BY sort_order ASC, id ASC';
     $stmt = db()->prepare($sql);
-    $stmt->execute($tierOrder);
+    $stmt->execute();
     $families = $stmt->fetchAll();
 
     $out = [];
     foreach ($families as $f) {
+        if (!tierAtLeast($tier, $f['tier'])) {
+            continue;
+        }
         $files = fontFilesByFamily((int) $f['id']);
         $visibleFiles = [];
         foreach ($files as $file) {
