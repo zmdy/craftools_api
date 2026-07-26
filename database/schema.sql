@@ -343,3 +343,31 @@ CREATE TABLE IF NOT EXISTS calendar_entries (
 CREATE INDEX IF NOT EXISTS idx_calendar_entries_month_day ON calendar_entries(month, day);
 CREATE INDEX IF NOT EXISTS idx_calendar_entries_category ON calendar_entries(category);
 CREATE INDEX IF NOT EXISTS idx_calendar_entries_source ON calendar_entries(category, month, day, source);
+
+-- ── Famílias de fontes e arquivos de fonte (TTF, OTF, WOFF, WOFF2) ───────────
+CREATE TABLE IF NOT EXISTS font_families (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    uuid            TEXT NOT NULL UNIQUE,
+    name            TEXT NOT NULL,
+    category        TEXT NOT NULL CHECK (category IN ('sans','serif','mono','display','script')),
+    tier            TEXT NOT NULL DEFAULT 'free' CHECK (tier IN ('free','plus','premium')),
+    sort_order      INTEGER NOT NULL DEFAULT 0,
+    active          INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0,1)),
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS font_files (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    uuid            TEXT NOT NULL UNIQUE,
+    family_id       INTEGER NOT NULL REFERENCES font_families(id) ON DELETE CASCADE,
+    weight          INTEGER NOT NULL DEFAULT 400,
+    style           TEXT NOT NULL DEFAULT 'normal' CHECK (style IN ('normal','italic')),
+    format          TEXT NOT NULL CHECK (format IN ('ttf','otf','woff','woff2')),
+    file_path       TEXT NOT NULL,
+    size_bytes      INTEGER NULL,
+    active          INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0,1)),
+    created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_font_files_family ON font_files(family_id);
+
