@@ -84,9 +84,9 @@ $logCtx['user_id'] = $tokenResult['token_row']['user_id'] ?? null;
 
 $resource = isset($_GET['resource']) ? strtolower(trim((string) $_GET['resource'])) : '';
 $logCtx['resource'] = $resource !== '' ? $resource : null;
-$validResources = ['grid-sizes', 'album-templates', 'phrases', 'phrase-collections', 'assets', 'backgrounds', 'overlays', 'collection', 'emoji-kitchen', 'calendar-dates', 'shapes', 'shape-collection'];
+$validResources = ['grid-sizes', 'album-templates', 'phrases', 'phrase-collections', 'assets', 'backgrounds', 'overlays', 'collection', 'emoji-kitchen', 'calendar-dates', 'shapes', 'shape-collection', 'fonts'];
 if (!in_array($resource, $validResources, true)) {
-    v1JsonError(400, 'Recurso inválido. Disponíveis: grid-sizes, album-templates, phrases, phrase-collections, assets, backgrounds, overlays, collection, emoji-kitchen, calendar-dates, shapes, shape-collection.');
+    v1JsonError(400, 'Recurso inválido. Disponíveis: grid-sizes, album-templates, phrases, phrase-collections, assets, backgrounds, overlays, collection, emoji-kitchen, calendar-dates, shapes, shape-collection, fonts.');
 }
 
 $data = [];
@@ -136,6 +136,10 @@ switch ($resource) {
     //   ?resource=shape-collection&id=<uuid>
     case 'shapes':
         $data = shapeCollectionsForApi($tier);
+        break;
+
+    case 'fonts':
+        $data = fontFamiliesForApi($tier);
         break;
 
     case 'shape-collection':

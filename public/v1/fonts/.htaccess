@@ -1,0 +1,6 @@
+# Permitir CORS para arquivos de fontes estáticos servidos pelo webserver
+<IfModule mod_headers.c>
+    Header set Access-Control-Allow-Origin "*"
+    Header set Access-Control-Allow-Methods "GET, OPTIONS"
+    Header set Cache-Control "public, max-age=86400"
+</IfModule>
