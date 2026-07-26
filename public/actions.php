@@ -521,6 +521,82 @@ try {
             }
             break;
 
+        // --------------------------------------------------------- fonts
+        case 'fonts':
+            if ($action === 'font_family_save') {
+                $id = (int) ($_POST['id'] ?? 0);
+                $d = [
+                    'name' => $_POST['name'] ?? '',
+                    'category' => $_POST['category'] ?? 'sans',
+                    'tier' => $_POST['tier'] ?? 'free',
+                    'sort_order' => (int) ($_POST['sort_order'] ?? 0),
+                    'active' => !empty($_POST['active']),
+                ];
+                if ($id > 0) {
+                    fontFamilyUpdate($id, $d);
+                    auditLog($adminId, 'update', 'font_families', (string) $id);
+                    flashRedirect('success', 'Família de fontes atualizada.', 'index.php?page=fonts');
+                } else {
+                    $newId = fontFamilyCreate($d);
+                    auditLog($adminId, 'create', 'font_families', (string) $newId);
+                    flashRedirect('success', 'Família de fontes criada.', 'index.php?page=fonts');
+                }
+            }
+
+            if ($action === 'font_family_delete') {
+                $id = (int) ($_POST['id'] ?? 0);
+                $files = fontFilesByFamily($id);
+                foreach ($files as $f) {
+                    fontFileDelete($f['id']);
+                }
+                fontFamilyDelete($id);
+                auditLog($adminId, 'delete', 'font_families', (string) $id);
+                flashRedirect('success', 'Família de fontes e seus arquivos removidos.', 'index.php?page=fonts');
+            }
+
+            if ($action === 'font_file_upload') {
+                $familyId = (int) ($_POST['family_id'] ?? 0);
+                $family = fontFamilyFind($familyId);
+                if (!$family) {
+                    flashRedirect('error', 'Família de fonte inválida.', 'index.php?page=fonts');
+                }
+                if (empty($_FILES['font_file']) || $_FILES['font_file']['error'] === UPLOAD_ERR_NO_FILE) {
+                    flashRedirect('error', 'Selecione um arquivo de fonte (.ttf, .otf, .woff ou .woff2).', $backTo);
+                }
+                try {
+                    $ext = strtolower(pathinfo($_FILES['font_file']['name'], PATHINFO_EXTENSION));
+                    $fileUuid = uuidv4();
+                    $relPath = 'v1/fonts/' . $family['uuid'] . '/' . $fileUuid . '.' . $ext;
+                    $destPath = CRAFTOOLS_API_ROOT . '/public/' . $relPath;
+
+                    require_once CRAFTOOLS_API_ROOT . '/src/fonts.php';
+                    $meta = handleFontUpload($_FILES['font_file'], $destPath);
+
+                    $newId = fontFileCreate([
+                        'family_id' => $familyId,
+                        'weight' => (int) ($_POST['weight'] ?? 400),
+                        'style' => $_POST['style'] ?? 'normal',
+                        'format' => $meta['format'],
+                        'file_path' => $relPath,
+                        'size_bytes' => $meta['size_bytes'],
+                    ]);
+                    db()->prepare('UPDATE font_files SET uuid = ? WHERE id = ?')->execute([$fileUuid, $newId]);
+
+                    auditLog($adminId, 'create', 'font_files', (string) $newId);
+                    flashRedirect('success', 'Arquivo de fonte enviado com sucesso.', $backTo);
+                } catch (RuntimeException $ex) {
+                    flashRedirect('error', $ex->getMessage(), $backTo);
+                }
+            }
+
+            if ($action === 'font_file_delete') {
+                $id = (int) ($_POST['id'] ?? 0);
+                fontFileDelete($id);
+                auditLog($adminId, 'delete', 'font_files', (string) $id);
+                flashRedirect('success', 'Arquivo de fonte removido.', $backTo);
+            }
+            break;
+
         // --------------------------------------------------------- calendar_dates
         case 'calendar_dates':
             if ($action === 'save') {
