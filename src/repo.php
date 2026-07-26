@@ -1684,3 +1684,118 @@ function calendarEntrySources(): array {
     $rows = db()->query("SELECT DISTINCT source FROM calendar_entries WHERE source IS NOT NULL AND source <> '' ORDER BY source")->fetchAll();
     return array_column($rows, 'source');
 }
+
+// ============================================================================
+// font_families / font_files — gerenciamento de catálogo de fontes
+// ============================================================================
+
+function fontFamilyList(): array {
+    return repoList('font_families', 'sort_order ASC, id ASC');
+}
+
+function fontFamilyFind(int $id): ?array {
+    return repoFind('font_families', $id);
+}
+
+function fontFamilyFindByUuid(string $uuid): ?array {
+    return repoFindByUuid('font_families', $uuid);
+}
+
+function fontFamilyCreate(array $d): int {
+    return repoInsert('font_families', [
+        'uuid' => uuidv4(),
+        'name' => trim((string) $d['name']),
+        'category' => strtolower(trim((string) ($d['category'] ?? 'sans'))),
+        'tier' => $d['tier'] ?? 'free',
+        'sort_order' => (int) ($d['sort_order'] ?? 0),
+        'active' => 1,
+        'created_at' => nowSql(),
+        'updated_at' => nowSql(),
+    ]);
+}
+
+function fontFamilyUpdate(int $id, array $d): void {
+    repoUpdate('font_families', $id, [
+        'name' => trim((string) $d['name']),
+        'category' => strtolower(trim((string) ($d['category'] ?? 'sans'))),
+        'tier' => $d['tier'] ?? 'free',
+        'sort_order' => (int) ($d['sort_order'] ?? 0),
+        'active' => !empty($d['active']) ? 1 : 0,
+        'updated_at' => nowSql(),
+    ]);
+}
+
+function fontFamilyDelete(int $id): void {
+    repoDelete('font_families', $id); // ON DELETE CASCADE remove font_files
+}
+
+function fontFilesByFamily(int $familyId): array {
+    return repoList('font_files', 'weight ASC, style ASC, format ASC', ['family_id' => $familyId]);
+}
+
+function fontFileFind(int $id): ?array {
+    return repoFind('font_files', $id);
+}
+
+function fontFileCreate(array $d): int {
+    return repoInsert('font_files', [
+        'uuid' => uuidv4(),
+        'family_id' => (int) $d['family_id'],
+        'weight' => (int) ($d['weight'] ?? 400),
+        'style' => strtolower(trim((string) ($d['style'] ?? 'normal'))),
+        'format' => strtolower(trim((string) $d['format'])),
+        'file_path' => $d['file_path'],
+        'size_bytes' => $d['size_bytes'] ?? null,
+        'active' => 1,
+        'created_at' => nowSql(),
+    ]);
+}
+
+function fontFileDelete(int $id): void {
+    $file = fontFileFind($id);
+    if ($file) {
+        $abs = CRAFTOOLS_API_ROOT . '/public/' . ltrim($file['file_path'], '/');
+        if (file_exists($abs)) {
+            @unlink($abs);
+        }
+        repoDelete('font_files', $id);
+    }
+}
+
+/**
+ * Monta o catálogo público de fontes filtrado por tier ([{id, name, category, tier, files: [{weight, style, format, api_url}]}])
+ */
+function fontFamiliesForApi(string $tier): array {
+    $sql = 'SELECT * FROM font_families WHERE active = 1';
+    $tierOrder = tierAllowedList($tier);
+    $inClause = implode(',', array_fill(0, count($tierOrder), '?'));
+    $sql .= " AND tier IN ($inClause) ORDER BY sort_order ASC, id ASC";
+
+    $stmt = db()->prepare($sql);
+    $stmt->execute($tierOrder);
+    $families = $stmt->fetchAll();
+
+    $out = [];
+    foreach ($families as $f) {
+        $files = fontFilesByFamily((int) $f['id']);
+        $visibleFiles = [];
+        foreach ($files as $file) {
+            if (!$file['active']) continue;
+            $visibleFiles[] = [
+                'weight' => (int) $file['weight'],
+                'style' => $file['style'],
+                'format' => $file['format'],
+                'api_url' => '/' . ltrim($file['file_path'], '/'),
+            ];
+        }
+        $out[] = [
+            'id' => $f['uuid'],
+            'name' => $f['name'],
+            'category' => $f['category'],
+            'tier' => $f['tier'],
+            'files' => $visibleFiles,
+        ];
+    }
+    return $out;
+}
+
