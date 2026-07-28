@@ -205,22 +205,27 @@ $monthLabels = [1 => 'Janeiro', 2 => 'Fevereiro', 3 => 'Março', 4 => 'Abril', 5
                     <td class="text-muted" style="max-width:220px;">
                         <?php
                         // Category-specific detail first (year/scope/source
-                        // link, as before); falls back to the generic
-                        // `description` column -- previously shown nowhere
-                        // in this list at all, even when a row actually had
-                        // one, which made it look like the field was dead.
-                        // Both can't apply to the same row today (only
-                        // 'event'/'holiday'/'saint' use the specific ones),
-                        // but showing description as the fallback rather
-                        // than unconditionally means a row's category-
-                        // specific detail is never hidden behind it.
+                        // link, as before); the generic `description` column
+                        // is now ALSO shown whenever populated, instead of
+                        // only as a last-resort fallback -- previously a
+                        // 'holiday' row's description was never displayed in
+                        // this list even when filled in via the edit form,
+                        // which made the field look dead/missing. For
+                        // 'holiday' rows specifically, scope/UF and
+                        // description are stacked on two lines since both
+                        // can be present at once.
                         ?>
-                        <?php if ($r['category'] === 'event' && $r['year']): ?>
-                            Ano <?= (int) $r['year'] ?>
+                        <?php if ($r['category'] === 'event'): ?>
+                            <?php if ($r['year']): ?>Ano <?= (int) $r['year'] ?><br><?php endif; ?>
+                            <?php if (!empty($r['description'])): ?><?= e(mb_strimwidth($r['description'], 0, 80, '…')) ?><?php endif; ?>
+                            <?php if (empty($r['year']) && empty($r['description'])): ?>—<?php endif; ?>
                         <?php elseif ($r['category'] === 'holiday'): ?>
                             <?= e($scopeLabels[$r['holiday_scope'] ?? 'national'] ?? '') ?><?= !empty($r['uf']) ? ' — ' . e($r['uf']) : '' ?><?= !empty($r['city']) ? '/' . e($r['city']) : '' ?>
-                        <?php elseif ($r['category'] === 'saint' && !empty($r['link'])): ?>
-                            <a href="<?= e($r['link']) ?>" target="_blank" rel="noopener">fonte ↗</a>
+                            <?php if (!empty($r['description'])): ?><br><?= e(mb_strimwidth($r['description'], 0, 80, '…')) ?><?php endif; ?>
+                        <?php elseif ($r['category'] === 'saint'): ?>
+                            <?php if (!empty($r['link'])): ?><a href="<?= e($r['link']) ?>" target="_blank" rel="noopener">fonte ↗</a><br><?php endif; ?>
+                            <?php if (!empty($r['description'])): ?><?= e(mb_strimwidth($r['description'], 0, 80, '…')) ?><?php endif; ?>
+                            <?php if (empty($r['link']) && empty($r['description'])): ?>—<?php endif; ?>
                         <?php elseif (!empty($r['description'])): ?>
                             <?= e(mb_strimwidth($r['description'], 0, 80, '…')) ?>
                         <?php else: ?>—<?php endif; ?>
