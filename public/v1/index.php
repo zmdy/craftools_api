@@ -244,12 +244,16 @@ switch ($resource) {
         v1JsonError(400, 'Parâmetro "mode" inválido. Disponíveis: supported, partners, combo, list.');
         break;
 
-    // Feriados/comemorações/santos/eventos históricos de uma data (mês+dia,
-    // sem ano -- recorrente todo ano). Aceita "month"+"day" OU "date=mmdd"
-    // (ex.: 25/12 -> date=1225). Sem nenhum dos dois, usa a data atual (UTC),
-    // já que o caso de uso mais comum é "o que temos para hoje".
+    // Feriados/comemorações/santos/eventos históricos de uma data (mês+dia)
+    // em um dado ano. Aceita "month"+"day" OU "date=mmdd" (ex.: 25/12 ->
+    // date=1225). Sem nenhum dos dois, usa a data atual (UTC), já que o caso
+    // de uso mais comum é "o que temos para hoje". "year" é opcional (padrão:
+    // ano atual) e só importa de fato para datas móveis (Dia das Mães,
+    // Carnaval, etc) -- datas fixas retornam o mesmo resultado em qualquer
+    // ano.
     //   ?resource=calendar-dates&month=12&day=25
     //   ?resource=calendar-dates&date=1225
+    //   ?resource=calendar-dates&month=5&day=11&year=2027
     case 'calendar-dates':
         $month = null;
         $day = null;
@@ -268,10 +272,19 @@ switch ($resource) {
         if ($month < 1 || $month > 12 || $day < 1 || $day > 31) {
             v1JsonError(400, 'Parâmetros "month"/"day" (ou "date=mmdd") inválidos.');
         }
+        $year = (int) date('Y');
+        if (isset($_GET['year']) && $_GET['year'] !== '') {
+            $yearParam = (int) $_GET['year'];
+            if ($yearParam < 1900 || $yearParam > 2200) {
+                v1JsonError(400, 'Parâmetro "year" inválido.');
+            }
+            $year = $yearParam;
+        }
         $data = [
             'month' => $month,
             'day' => $day,
-        ] + calendarEntryForDate($tier, $month, $day);
+            'year' => $year,
+        ] + calendarEntryForDate($tier, $month, $day, $year);
         break;
 }
 
