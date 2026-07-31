@@ -326,6 +326,14 @@ CREATE TABLE IF NOT EXISTS calendar_entries (
     category        TEXT NOT NULL CHECK (category IN ('holiday','commemoration_main','commemoration_misc','saint','event')),
     month           INTEGER NOT NULL CHECK (month BETWEEN 1 AND 12),
     day             INTEGER NOT NULL CHECK (day BETWEEN 1 AND 31),
+    -- Movable dates (Dia das Mães, Carnaval, Sexta-Feira Santa, etc -- see
+    -- src/calendar_date_rules.php): when set, this JSON rule is the real
+    -- source of truth for the row's date, resolved fresh for whatever year
+    -- is being queried. month/day above stay populated even then (recomputed
+    -- for the CURRENT year on every save) purely as a fallback reference for
+    -- anything that only reads those two columns directly (sorting, CSV
+    -- export) -- calendarEntryForDate() itself always resolves this instead.
+    date_rule       TEXT NULL,
     year            INTEGER NULL,
     title           TEXT NOT NULL,
     description     TEXT NULL,

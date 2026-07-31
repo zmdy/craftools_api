@@ -218,6 +218,7 @@ function ensureAdditiveSchema(PDO $pdo): void {
                     category        TEXT NOT NULL CHECK (category IN ('holiday','commemoration_main','commemoration_misc','saint','event')),
                     month           INTEGER NOT NULL CHECK (month BETWEEN 1 AND 12),
                     day             INTEGER NOT NULL CHECK (day BETWEEN 1 AND 31),
+                    date_rule       TEXT NULL,
                     year            INTEGER NULL,
                     title           TEXT NOT NULL,
                     description     TEXT NULL,
@@ -245,7 +246,7 @@ function ensureAdditiveSchema(PDO $pdo): void {
             // definition, one someone deliberately picked as noteworthy.
             $pdo->exec("
                 INSERT INTO calendar_entries
-                    (id, uuid, category, month, day, year, title, description, link, holiday_scope, uf, city, source, tier, sort_order, active, created_at, updated_at)
+                    (id, uuid, category, month, day, date_rule, year, title, description, link, holiday_scope, uf, city, source, tier, sort_order, active, created_at, updated_at)
                 SELECT
                     id, uuid,
                     CASE
@@ -253,7 +254,7 @@ function ensureAdditiveSchema(PDO $pdo): void {
                         WHEN category = 'commemoration' THEN 'commemoration_main'
                         ELSE category
                     END,
-                    month, day, year, title, description, link, holiday_scope, uf, city, source, tier, sort_order, active, created_at, updated_at
+                    month, day, NULL, year, title, description, link, holiday_scope, uf, city, source, tier, sort_order, active, created_at, updated_at
                 FROM calendar_entries_old_commemoration_split
             ");
             $pdo->exec('DROP TABLE calendar_entries_old_commemoration_split');
@@ -262,6 +263,24 @@ function ensureAdditiveSchema(PDO $pdo): void {
             $pdo->rollBack();
             throw $e;
         }
+    }
+
+    // calendar_entries.date_rule (movable dates -- Dia das Mães, Carnaval,
+    // etc, see src/calendar_date_rules.php): added after the table above
+    // already existed on most installs, so it needs the same lightweight
+    // ALTER TABLE ADD COLUMN as phrase_collections.description below --
+    // independent of (and safe to run whether or not) the commemoration-
+    // split rebuild above just ran in this same request.
+    $calCols = $pdo->query('PRAGMA table_info(calendar_entries)')->fetchAll(PDO::FETCH_ASSOC);
+    $hasDateRule = false;
+    foreach ($calCols as $col) {
+        if ($col['name'] === 'date_rule') {
+            $hasDateRule = true;
+            break;
+        }
+    }
+    if (!$hasDateRule) {
+        $pdo->exec('ALTER TABLE calendar_entries ADD COLUMN date_rule TEXT NULL');
     }
 }
 
