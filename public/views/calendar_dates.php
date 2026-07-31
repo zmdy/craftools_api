@@ -39,6 +39,15 @@ $baseQs         = http_build_query(array_filter([
 
 $sources = calendarEntrySources();
 
+// Regra de data móvel (se houver) já salva no registro em edição -- decodifica
+// pra pré-preencher os campos de regra e marcar "Tipo de data" corretamente.
+$editingRule = !empty($editing['date_rule']) ? json_decode((string) $editing['date_rule'], true) : null;
+if (!is_array($editingRule)) {
+    $editingRule = null;
+}
+$weekdayLabels = [0 => 'Domingo', 1 => 'Segunda-feira', 2 => 'Terça-feira', 3 => 'Quarta-feira', 4 => 'Quinta-feira', 5 => 'Sexta-feira', 6 => 'Sábado'];
+$nthLabels     = [1 => '1º', 2 => '2º', 3 => '3º', 4 => '4º', 5 => '5º'];
+
 $categoryLabels = [
     'holiday'            => 'Feriado',
     'commemoration_main' => 'Comemoração (principal)',
@@ -67,6 +76,13 @@ $monthLabels = [1 => 'Janeiro', 2 => 'Fevereiro', 3 => 'Março', 4 => 'Abril', 5
                     </select>
                 </div>
                 <div class="field">
+                    <label>Tipo de data</label>
+                    <select name="date_type" id="cal-date-type">
+                        <option value="fixed" <?= $editingRule === null ? 'selected' : '' ?>>Fixa</option>
+                        <option value="rule" <?= $editingRule !== null ? 'selected' : '' ?>>Móvel (regra calculada)</option>
+                    </select>
+                </div>
+                <div class="field" data-cal-date-type="fixed">
                     <label>Mês</label>
                     <select name="month">
                         <?php foreach ($monthLabels as $val => $label): ?>
@@ -74,13 +90,52 @@ $monthLabels = [1 => 'Janeiro', 2 => 'Fevereiro', 3 => 'Março', 4 => 'Abril', 5
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <div class="field">
+                <div class="field" data-cal-date-type="fixed">
                     <label>Dia</label>
                     <input type="number" name="day" min="1" max="31" value="<?= (int) ($editing['day'] ?? 1) ?>" required>
                 </div>
                 <div class="field" data-cal-field="event">
                     <label>Ano (evento histórico)</label>
                     <input type="number" name="year" value="<?= e($editing['year'] ?? '') ?>" placeholder="Ex: 1822">
+                </div>
+            </div>
+            <div class="field-row" data-cal-date-type="rule">
+                <div class="field">
+                    <label>Tipo de regra</label>
+                    <select name="rule_type" id="cal-rule-type">
+                        <option value="nth_weekday" <?= ($editingRule['type'] ?? '') === 'nth_weekday' ? 'selected' : '' ?>>Nª ocorrência de um dia da semana no mês</option>
+                        <option value="last_weekday" <?= ($editingRule['type'] ?? '') === 'last_weekday' ? 'selected' : '' ?>>Última ocorrência de um dia da semana no mês</option>
+                        <option value="easter_offset" <?= ($editingRule['type'] ?? '') === 'easter_offset' ? 'selected' : '' ?>>Deslocamento em relação à Páscoa</option>
+                    </select>
+                </div>
+                <div class="field" data-cal-rule-type="nth_weekday,last_weekday">
+                    <label>Mês</label>
+                    <select name="rule_month">
+                        <?php foreach ($monthLabels as $val => $label): ?>
+                            <option value="<?= $val ?>" <?= (int) ($editingRule['month'] ?? 0) === $val ? 'selected' : '' ?>><?= $label ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="field" data-cal-rule-type="nth_weekday,last_weekday">
+                    <label>Dia da semana</label>
+                    <select name="rule_weekday">
+                        <?php foreach ($weekdayLabels as $val => $label): ?>
+                            <option value="<?= $val ?>" <?= (int) ($editingRule['weekday'] ?? 0) === $val ? 'selected' : '' ?>><?= $label ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="field" data-cal-rule-type="nth_weekday">
+                    <label>Ocorrência</label>
+                    <select name="rule_nth">
+                        <?php foreach ($nthLabels as $val => $label): ?>
+                            <option value="<?= $val ?>" <?= (int) ($editingRule['nth'] ?? 1) === $val ? 'selected' : '' ?>><?= $label ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="field" data-cal-rule-type="easter_offset">
+                    <label>Deslocamento da Páscoa (dias)</label>
+                    <input type="number" name="rule_offset" value="<?= e($editingRule['offset'] ?? 0) ?>">
+                    <small class="text-muted">Negativo = antes, positivo = depois. Ex: -47 = Carnaval, -2 = Sexta-Feira Santa, 60 = Corpus Christi.</small>
                 </div>
             </div>
             <div class="field">
@@ -198,8 +253,20 @@ $monthLabels = [1 => 'Janeiro', 2 => 'Fevereiro', 3 => 'Março', 4 => 'Abril', 5
                 <tr class="empty-row"><td colspan="7">Nenhum registro cadastrado.</td></tr>
             <?php endif; ?>
             <?php foreach ($rows as $r): ?>
+                <?php
+                $rowRule = !empty($r['date_rule']) ? json_decode((string) $r['date_rule'], true) : null;
+                $rowRule = is_array($rowRule) ? $rowRule : null;
+                $rowResolved = $rowRule !== null ? calendarEntryResolvedMonthDay($r, (int) date('Y')) : null;
+                ?>
                 <tr>
-                    <td class="mono"><?= str_pad((string) $r['day'], 2, '0', STR_PAD_LEFT) ?>/<?= str_pad((string) $r['month'], 2, '0', STR_PAD_LEFT) ?></td>
+                    <td class="mono">
+                        <?php if ($rowRule !== null && $rowResolved !== null): ?>
+                            <?= str_pad((string) $rowResolved['day'], 2, '0', STR_PAD_LEFT) ?>/<?= str_pad((string) $rowResolved['month'], 2, '0', STR_PAD_LEFT) ?>/<?= date('Y') ?>
+                            <br><span class="text-muted" style="font-size:11px; white-space:nowrap;">móvel — <?= e(calendarDateRuleDescribe($rowRule)) ?></span>
+                        <?php else: ?>
+                            <?= str_pad((string) $r['day'], 2, '0', STR_PAD_LEFT) ?>/<?= str_pad((string) $r['month'], 2, '0', STR_PAD_LEFT) ?>
+                        <?php endif; ?>
+                    </td>
                     <td><span class="badge" style="background:rgba(99,102,241,.1);color:#6366f1;"><?= e($categoryLabels[$r['category']] ?? $r['category']) ?></span></td>
                     <td style="max-width:280px;"><?= e(mb_strimwidth($r['title'], 0, 100, '…')) ?></td>
                     <td class="text-muted" style="max-width:220px;">
