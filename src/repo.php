@@ -1480,6 +1480,21 @@ function calendarEntryRowFromInput(array $d): array {
     $month = max(1, min(12, (int) ($d['month'] ?? 0)));
     $day   = max(1, min(31, (int) ($d['day'] ?? 0)));
 
+    // Movable date (Dia das Mães, Carnaval, Sexta-Feira Santa, etc -- see
+    // src/calendar_date_rules.php). When present, `month`/`day` above (from
+    // the form's always-visible fields, or whatever a CSV/importer row
+    // happened to carry) are DISCARDED in favor of this rule resolved for
+    // the CURRENT year -- keeps those two columns populated (still needed:
+    // NOT NULL + the month/day index, CSV export, anything that hasn't been
+    // taught to read date_rule) as a reference value, without them ever
+    // being the actual source of truth for a movable row's date again.
+    $dateRule = calendarDateRuleFromInput($d);
+    if ($dateRule !== null) {
+        $resolved = calendarDateRuleResolve($dateRule, (int) date('Y'));
+        $month = $resolved['month'];
+        $day   = $resolved['day'];
+    }
+
     $year = null;
     if ($category === 'event' && isset($d['year']) && $d['year'] !== '') {
         $year = (int) $d['year'];
@@ -1508,6 +1523,7 @@ function calendarEntryRowFromInput(array $d): array {
         'category'      => $category,
         'month'         => $month,
         'day'           => $day,
+        'date_rule'     => $dateRule !== null ? json_encode($dateRule, JSON_UNESCAPED_UNICODE) : null,
         'year'          => $year,
         'title'         => trim((string) ($d['title'] ?? '')),
         'description'   => trim((string) ($d['description'] ?? '')) ?: null,
@@ -1550,20 +1566,66 @@ function calendarEntryToApiShape(array $row): array {
 }
 
 /**
- * Consulta principal da API pública: tudo cadastrado para um mês/dia,
- * filtrado por tier e agrupado nas 5 categorias pedidas (chaves em inglês --
- * holidays/commemorationsMain/commemorationsMisc/saints/events -- espelhando
- * CALENDAR_ENTRY_CATEGORIES).
+ * Resolve o month/day "de fato" de uma linha para `$year`: se a linha não
+ * tem date_rule (data fixa), retorna as próprias colunas month/day. Se tem,
+ * decodifica e resolve a regra via calendarDateRuleResolve() -- com fallback
+ * silencioso para as colunas month/day (snapshot antigo) caso o JSON esteja
+ * corrompido/malformado ou a regra seja de um tipo desconhecido, para nunca
+ * derrubar a API pública por causa de uma linha ruim.
  */
-function calendarEntryForDate(string $tier, int $month, int $day): array {
-    $stmt = db()->prepare(
-        'SELECT * FROM calendar_entries WHERE active = 1 AND month = ? AND day = ?
-         ORDER BY category ASC, sort_order ASC, id ASC'
+function calendarEntryResolvedMonthDay(array $row, int $year): ?array {
+    if (empty($row['date_rule'])) {
+        return ['month' => (int) $row['month'], 'day' => (int) $row['day']];
+    }
+    $rule = json_decode((string) $row['date_rule'], true);
+    if (!is_array($rule)) {
+        return ['month' => (int) $row['month'], 'day' => (int) $row['day']];
+    }
+    try {
+        return calendarDateRuleResolve($rule, $year);
+    } catch (Throwable $e) {
+        return ['month' => (int) $row['month'], 'day' => (int) $row['day']];
+    }
+}
+
+/**
+ * Consulta principal da API pública: tudo cadastrado para um mês/dia em um
+ * dado ano, filtrado por tier e agrupado nas 5 categorias pedidas (chaves em
+ * inglês -- holidays/commemorationsMain/commemorationsMisc/saints/events --
+ * espelhando CALENDAR_ENTRY_CATEGORIES).
+ *
+ * Linhas fixas (date_rule NULL) são filtradas direto no SQL por month/day.
+ * Linhas com date_rule (datas móveis -- Dia das Mães, Carnaval, etc) não dão
+ * pra filtrar no SQL, já que o month/day salvo é só um snapshot do ano em que
+ * a regra foi resolvida por último: são carregadas todas e cada uma é
+ * resolvida em memória para `$year` via calendarEntryResolvedMonthDay(),
+ * mantendo só as que caem no dia pedido.
+ */
+function calendarEntryForDate(string $tier, int $month, int $day, ?int $year = null): array {
+    $year = $year ?? (int) date('Y');
+    $pdo = db();
+
+    $stmt = $pdo->prepare(
+        'SELECT * FROM calendar_entries WHERE active = 1 AND date_rule IS NULL AND month = ? AND day = ?'
     );
     $stmt->execute([$month, $day]);
+    $rows = $stmt->fetchAll();
+
+    $ruleStmt = $pdo->query('SELECT * FROM calendar_entries WHERE active = 1 AND date_rule IS NOT NULL');
+    foreach ($ruleStmt->fetchAll() as $row) {
+        $resolved = calendarEntryResolvedMonthDay($row, $year);
+        if ($resolved !== null && $resolved['month'] === $month && $resolved['day'] === $day) {
+            $rows[] = $row;
+        }
+    }
+
+    usort($rows, function (array $a, array $b): int {
+        return [(string) $a['category'], (int) $a['sort_order'], (int) $a['id']]
+            <=> [(string) $b['category'], (int) $b['sort_order'], (int) $b['id']];
+    });
 
     $out = ['holidays' => [], 'commemorationsMain' => [], 'commemorationsMisc' => [], 'saints' => [], 'events' => []];
-    foreach ($stmt->fetchAll() as $row) {
+    foreach ($rows as $row) {
         if (!tierAtLeast($tier, $row['tier'])) {
             continue;
         }
