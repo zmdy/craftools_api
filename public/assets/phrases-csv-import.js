@@ -4,6 +4,7 @@
 
     const fileInput    = document.getElementById('csv-file');
     const collectionInput = document.getElementById('csv-collection');
+    const separatorSelect = document.getElementById('csv-separator');
     const defaultTier  = document.getElementById('csv-default-tier');
     const defaultLang  = document.getElementById('csv-default-lang');
     const preview      = document.getElementById('csv-preview');
@@ -24,16 +25,31 @@
     const VALID_TIERS  = ['free', 'plus', 'premium'];
     const VALID_LANGS  = ['pt-br', 'en', 'es'];
 
-    let parsedRows = [];
+    let parsedRows  = [];
+    let lastCsvText = null; // kept so switching the separator can re-parse the same file without re-reading it
 
-    // ── Parse CSV (delimitador ;) ────────────────────────────────────────────
+    // ── Parse CSV (delimitador configurável -- ver #csv-separator) ───────────
     function parseCsv(text) {
+        // '\t' comes through literally as backslash-t from the <option value>
+        // (HTML attribute values aren't escape-sequence-aware) -- translate it
+        // to a real tab before using it to split.
+        var sep = (separatorSelect && separatorSelect.value) || ';';
+        if (sep === '\\t') sep = '\t';
+
+        // The category sub-field (column 3) is normally split on ',' -- but
+        // if the user picked ',' itself as the FIELD separator, that would
+        // shred "motivacional,vida" into two different columns instead of one
+        // category column with two values. Falls back to ';' for the
+        // sub-split in that one case so multi-category values still work
+        // (matches the note in the intro paragraph above the form).
+        var catSep = sep === ',' ? ';' : ',';
+
         const lines  = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n').filter(l => l.trim() !== '');
         const rows   = [];
         const errors = [];
 
         lines.forEach(function (line, idx) {
-            const cols   = line.split(';').map(function (c) { return c.trim(); });
+            const cols   = line.split(sep).map(function (c) { return c.trim(); });
             const phrase = cols[0] || '';
 
             // Detecta cabeçalho na primeira linha
@@ -46,7 +62,7 @@
 
             const author   = cols[1] || '';
             const catRaw   = cols[2] || '';
-            const category = catRaw.split(',').map(function (c) { return c.trim(); }).filter(Boolean).join(',');
+            const category = catRaw.split(catSep).map(function (c) { return c.trim(); }).filter(Boolean).join(',');
             const language = VALID_LANGS.indexOf(cols[3]) !== -1 ? cols[3] : defaultLang.value;
             const tier     = VALID_TIERS.indexOf(cols[4]) !== -1 ? cols[4] : defaultTier.value;
 
@@ -103,12 +119,24 @@
         if (!file) return;
         var reader = new FileReader();
         reader.onload = function (e) {
-            var result = parseCsv(e.target.result);
+            lastCsvText = e.target.result;
+            var result = parseCsv(lastCsvText);
             parsedRows = result.rows;
             renderPreview(result.rows, result.errors);
         };
         reader.readAsText(file, 'UTF-8');
     });
+
+    // Re-parse the already-loaded file whenever the separator changes,
+    // instead of leaving the preview showing columns split with the old one.
+    if (separatorSelect) {
+        separatorSelect.addEventListener('change', function () {
+            if (lastCsvText === null) return;
+            var result = parseCsv(lastCsvText);
+            parsedRows = result.rows;
+            renderPreview(result.rows, result.errors);
+        });
+    }
 
     // Remover linha individual do preview
     previewBody.addEventListener('click', function (e) {

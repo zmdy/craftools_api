@@ -8,8 +8,9 @@ $existingCollections = phraseCollectionNames();
     <div class="card-body">
         <p class="text-muted" style="margin-bottom:16px; line-height:1.6;">
             Importe frases em massa a partir de um arquivo <strong>.csv</strong>.
-            Os campos devem ser separados por <strong>ponto-e-vírgula (<code>;</code>)</strong>.
-            Múltiplas categorias devem ser separadas por <strong>vírgula (<code>,</code>)</strong> dentro do campo categoria.<br>
+            Escolha abaixo o separador de campos usado no seu arquivo (padrão: <strong>ponto-e-vírgula (<code>;</code>)</strong>).
+            Múltiplas categorias devem ser separadas por <strong>vírgula (<code>,</code>)</strong> dentro do campo categoria
+            — <span id="csv-cat-sep-note">exceto se o separador de campos escolhido for a própria vírgula, caso em que ponto-e-vírgula (<code>;</code>) é usado para separar categorias.</span><br>
             A primeira linha pode ser um cabeçalho — ela é detectada automaticamente e ignorada.
         </p>
 
@@ -51,6 +52,15 @@ $existingCollections = phraseCollectionNames();
                         <?php foreach ($existingCollections as $c): ?><option value="<?= e($c) ?>"><?php endforeach; ?>
                     </datalist>
                     <div class="help-text">Todas as frases deste arquivo entram nesta coleção (criada automaticamente se ainda não existir).</div>
+                </div>
+                <div class="field">
+                    <label for="csv-separator">Separador</label>
+                    <select id="csv-separator">
+                        <option value=";" selected>Ponto-e-vírgula ( ; )</option>
+                        <option value=",">Vírgula ( , )</option>
+                        <option value="\t">Tabulação</option>
+                        <option value="|">Pipe ( | )</option>
+                    </select>
                 </div>
                 <div class="field">
                     <label for="csv-default-tier">Tier padrão</label>
