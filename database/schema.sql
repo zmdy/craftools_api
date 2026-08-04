@@ -81,6 +81,7 @@ CREATE TABLE IF NOT EXISTS grid_sizes (
     cell_columns    INTEGER NULL,
     cell_spacing    REAL NULL,
     sizes_json      TEXT NOT NULL DEFAULT '[]',
+    allowed_orientations_json TEXT NOT NULL DEFAULT '["portrait","landscape"]',
     cell_slots_json TEXT NULL,
     tier            TEXT NOT NULL DEFAULT 'free' CHECK (tier IN ('free','plus','premium')),
     sort_order      INTEGER NOT NULL DEFAULT 0,

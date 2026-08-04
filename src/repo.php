@@ -137,6 +137,11 @@ function gridSizeToApiShape(array $row): array {
     if (!empty($row['cell_slots_json'])) {
         $shape['cellSlots'] = json_decode($row['cell_slots_json'], true);
     }
+    if (!empty($row['allowed_orientations_json'])) {
+        $shape['allowedOrientations'] = json_decode($row['allowed_orientations_json'], true);
+    } else {
+        $shape['allowedOrientations'] = ['portrait', 'landscape'];
+    }
     return $shape;
 }
 
@@ -167,6 +172,7 @@ function gridSizeRowFromInput(array $d): array {
         'cell_columns' => $d['cell_columns'] !== '' ? (int) $d['cell_columns'] : null,
         'cell_spacing' => $d['cell_spacing'] !== '' ? (float) $d['cell_spacing'] : null,
         'sizes_json' => jsonLinesToArrayJson($d['sizes_lines'] ?? ''),
+        'allowed_orientations_json' => !empty($d['allowed_orientations_json']) ? $d['allowed_orientations_json'] : '["portrait","landscape"]',
         'cell_slots_json' => $d['cell_slots_json'] ?? null,
         'tier' => $d['tier'],
         'sort_order' => (int) ($d['sort_order'] ?? 0),
