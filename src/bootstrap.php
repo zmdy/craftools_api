@@ -102,6 +102,7 @@ require_once __DIR__ . '/images.php';
 require_once __DIR__ . '/shapes.php';
 require_once __DIR__ . '/upload_links.php';
 require_once __DIR__ . '/updater.php';
+require_once __DIR__ . '/webhooks.php';
 
 // Garante que o banco/schema existe desde a primeira requisição.
 db();

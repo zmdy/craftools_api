@@ -163,6 +163,44 @@ function ensureAdditiveSchema(PDO $pdo): void {
             created_at      TEXT NOT NULL DEFAULT (datetime('now'))
         );
         CREATE INDEX IF NOT EXISTS idx_font_files_family ON font_files(family_id);
+
+        -- ── webhook_events — Idempotência e auditoria de webhooks de pagamento ──
+        CREATE TABLE IF NOT EXISTS webhook_events (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            uuid            TEXT NOT NULL UNIQUE,
+            provider        TEXT NOT NULL,
+            event_type      TEXT NOT NULL,
+            transaction_id  TEXT NOT NULL,
+            payload_json    TEXT NOT NULL DEFAULT '{}',
+            status          TEXT NOT NULL DEFAULT 'processed' CHECK (status IN ('processed','failed','ignored')),
+            error_message   TEXT NULL,
+            created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_webhook_events_tx
+            ON webhook_events(provider, transaction_id, event_type);
+        CREATE INDEX IF NOT EXISTS idx_webhook_events_created
+            ON webhook_events(created_at);
+
+        -- ── user_subscriptions — Histórico de assinaturas e transações externas ──
+        CREATE TABLE IF NOT EXISTS user_subscriptions (
+            id                          INTEGER PRIMARY KEY AUTOINCREMENT,
+            uuid                        TEXT NOT NULL UNIQUE,
+            user_id                     INTEGER NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+            provider                    TEXT NOT NULL,
+            external_subscription_id    TEXT NULL,
+            external_transaction_id     TEXT NULL,
+            product_name                TEXT NULL,
+            tier                        TEXT NOT NULL DEFAULT 'premium' CHECK (tier IN ('free','plus','premium')),
+            status                      TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','canceled','refunded','past_due')),
+            starts_at                   TEXT NOT NULL,
+            expires_at                  TEXT NULL,
+            created_at                  TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at                  TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_user_subscriptions_user
+            ON user_subscriptions(user_id);
+        CREATE INDEX IF NOT EXISTS idx_user_subscriptions_provider
+            ON user_subscriptions(provider, external_transaction_id);
     ");
 
     // phrase_collections may already exist (created by an earlier version of
@@ -281,6 +319,19 @@ function ensureAdditiveSchema(PDO $pdo): void {
     }
     if (!$hasDateRule) {
         $pdo->exec('ALTER TABLE calendar_entries ADD COLUMN date_rule TEXT NULL');
+    }
+
+    // app_users.subscription_provider e app_users.expires_at foram adicionados
+    // para suportar a integração de webhooks de pagamento (Kiwify, Hotmart ...).
+    // ALTER TABLE ADD COLUMN é idempotente (SQLite não reescreve a tabela).
+    $appUserCols = $pdo->query('PRAGMA table_info(app_users)')->fetchAll(PDO::FETCH_ASSOC);
+    $appUserColNames = array_column($appUserCols, 'name');
+
+    if (!in_array('subscription_provider', $appUserColNames, true)) {
+        $pdo->exec('ALTER TABLE app_users ADD COLUMN subscription_provider TEXT NULL');
+    }
+    if (!in_array('expires_at', $appUserColNames, true)) {
+        $pdo->exec('ALTER TABLE app_users ADD COLUMN expires_at TEXT NULL');
     }
 }
 

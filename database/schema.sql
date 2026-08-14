@@ -30,16 +30,18 @@ CREATE TABLE IF NOT EXISTS admin_users (
 -- via Google OAuth é trabalho futuro — ver relatório); por enquanto o acesso
 -- de cada cliente é exercido através dos tokens de API emitidos para ele.
 CREATE TABLE IF NOT EXISTS app_users (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    uuid            TEXT NOT NULL UNIQUE,
-    name            TEXT NOT NULL,
-    email           TEXT NOT NULL UNIQUE,
-    tier            TEXT NOT NULL DEFAULT 'free' CHECK (tier IN ('free','plus','premium')),
-    status          TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','suspended')),
-    notes           TEXT NULL,
-    google_sub      TEXT NULL UNIQUE,
-    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+    uuid                    TEXT NOT NULL UNIQUE,
+    name                    TEXT NOT NULL,
+    email                   TEXT NOT NULL UNIQUE,
+    tier                    TEXT NOT NULL DEFAULT 'free' CHECK (tier IN ('free','plus','premium')),
+    status                  TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','suspended')),
+    notes                   TEXT NULL,
+    google_sub              TEXT NULL UNIQUE,
+    subscription_provider   TEXT NULL,
+    expires_at              TEXT NULL,
+    created_at              TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at              TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 -- ── Tokens de acesso à API pública ───────────────────────────────────────────
@@ -380,3 +382,41 @@ CREATE TABLE IF NOT EXISTS font_files (
 );
 CREATE INDEX IF NOT EXISTS idx_font_files_family ON font_files(family_id);
 
+-- ── Webhooks de Pagamento (Kiwify, Hotmart, Eduzz ...) ───────────────────────
+-- Garante idempotência: uma mesma transação não é processada duas vezes.
+-- payload_json armazena o corpo bruto do webhook para auditoria/debugging.
+CREATE TABLE IF NOT EXISTS webhook_events (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    uuid            TEXT NOT NULL UNIQUE,
+    provider        TEXT NOT NULL,
+    event_type      TEXT NOT NULL,
+    transaction_id  TEXT NOT NULL,
+    payload_json    TEXT NOT NULL DEFAULT '{}',
+    status          TEXT NOT NULL DEFAULT 'processed' CHECK (status IN ('processed','failed','ignored')),
+    error_message   TEXT NULL,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_webhook_events_tx ON webhook_events(provider, transaction_id, event_type);
+CREATE INDEX IF NOT EXISTS idx_webhook_events_created ON webhook_events(created_at);
+
+-- ── Histórico de assinaturas (uma linha por transação externa) ───────────────
+-- Permite rastrear o ciclo completo de cada compra: aprovação, troca de plano,
+-- cancelamento ou reembolso. Cada webhook aprovado insere uma linha nova em vez
+-- de sobrescrever a anterior, preservando o histórico completo.
+CREATE TABLE IF NOT EXISTS user_subscriptions (
+    id                          INTEGER PRIMARY KEY AUTOINCREMENT,
+    uuid                        TEXT NOT NULL UNIQUE,
+    user_id                     INTEGER NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+    provider                    TEXT NOT NULL,
+    external_subscription_id    TEXT NULL,
+    external_transaction_id     TEXT NULL,
+    product_name                TEXT NULL,
+    tier                        TEXT NOT NULL DEFAULT 'premium' CHECK (tier IN ('free','plus','premium')),
+    status                      TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','canceled','refunded','past_due')),
+    starts_at                   TEXT NOT NULL,
+    expires_at                  TEXT NULL,
+    created_at                  TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at                  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_user_subscriptions_user ON user_subscriptions(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_subscriptions_provider ON user_subscriptions(provider, external_transaction_id);
