@@ -530,6 +530,14 @@ try {
 
         // --------------------------------------------------------- fonts
         case 'fonts':
+            // Both the upload and delete forms in views/fonts.php post to
+            // `action="index.php?page=fonts&family=<id>"` (so the redirect
+            // after either lands back on that family's own file list, not
+            // the families list) -- read it from $_GET rather than
+            // $_POST['family_id'], since the delete form's only POST field
+            // is the file `id`, not the family id.
+            $backTo = !empty($_GET['family']) ? 'index.php?page=fonts&family=' . (int) $_GET['family'] : 'index.php?page=fonts';
+
             if ($action === 'font_family_save') {
                 $id = (int) ($_POST['id'] ?? 0);
                 $d = [
