@@ -84,8 +84,17 @@ $formatMap = [
 ];
 
 $schemeAndHost = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
-// Extrai base do script (ex: /v1)
-$baseUrl = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/v1'), '/\\');
+// $file['api_url'] (built by fontFamiliesForApi()) is always "/v1/fonts/...",
+// rooted at the "public/" docroot -- so the base to prepend is public/'s OWN
+// URL path, i.e. two directories up from this script
+// (".../public/v1/fonts.css.php" -> ".../public/v1" -> ".../public"). Used
+// to matter only when this API is deployed at the domain root (where that
+// base is simply ""), but breaks the moment it lives in a subdirectory --
+// exactly this XAMPP setup's "/craftools_api/public" -- producing
+// "http://host/v1/fonts/..." URLs 404ing instead of
+// "http://host/craftools_api/public/v1/fonts/...".
+$baseUrl = rtrim(dirname(dirname($_SERVER['SCRIPT_NAME'] ?? '/public/v1/fonts.css.php')), '/\\');
+if ($baseUrl === '/' || $baseUrl === '\\') $baseUrl = '';
 
 $cssRules = [];
 
@@ -137,7 +146,7 @@ foreach ($requestedFamilies as $reqName => $reqSpecs) {
         });
 
         foreach ($fileGroup as $file) {
-            $fullUrl = $schemeAndHost . $file['api_url'];
+            $fullUrl = $schemeAndHost . $baseUrl . $file['api_url'];
             $fmt = $formatMap[$file['format']] ?? '';
             $srcParts[] = "url('{$fullUrl}') " . $fmt;
         }
