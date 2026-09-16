@@ -1782,13 +1782,27 @@ function fontFamilyCreate(array $d): int {
     ]);
 }
 
+/**
+ * Partial update: any key missing from `$d` keeps the row's CURRENT value
+ * instead of silently resetting to a hardcoded default. The admin panel's
+ * own "font_family_save" form (public/actions.php) always submits every
+ * field, so this never mattered there -- but a script calling this with
+ * e.g. only `['name' => ...]` (a quick rename, no other change intended)
+ * used to blank out `category`/`sort_order` AND flip `active` to 0, the
+ * exact flag fontFamilyListActiveForTier() (and therefore fonts.css.php)
+ * filters on -- silently making the renamed family stop being served at
+ * all, while every DB tool still listed it looking perfectly normal
+ * (`fontFamilyList()` doesn't filter by `active`, only the public-serving
+ * query does).
+ */
 function fontFamilyUpdate(int $id, array $d): void {
+    $current = fontFamilyFind($id) ?? [];
     repoUpdate('font_families', $id, [
-        'name' => trim((string) $d['name']),
-        'category' => strtolower(trim((string) ($d['category'] ?? 'sans'))),
-        'tier' => $d['tier'] ?? 'free',
-        'sort_order' => (int) ($d['sort_order'] ?? 0),
-        'active' => !empty($d['active']) ? 1 : 0,
+        'name' => trim((string) ($d['name'] ?? $current['name'] ?? '')),
+        'category' => strtolower(trim((string) ($d['category'] ?? $current['category'] ?? 'sans'))),
+        'tier' => $d['tier'] ?? $current['tier'] ?? 'free',
+        'sort_order' => (int) ($d['sort_order'] ?? $current['sort_order'] ?? 0),
+        'active' => array_key_exists('active', $d) ? (!empty($d['active']) ? 1 : 0) : (int) ($current['active'] ?? 1),
         'updated_at' => nowSql(),
     ]);
 }
